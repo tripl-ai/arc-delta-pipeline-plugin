@@ -55,10 +55,9 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
   }
 
   after {
-    session.close
   }
 
-  test("ZDeltaLakeExtractSuite: batch") {
+  test("DeltaLakeExtractSuite: batch") {
     implicit val spark = session
     import spark.implicits._
     implicit val logger = TestUtils.getLogger()
@@ -69,22 +68,6 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
 
     val conf = s"""{
       "stages": [
-        {
-          "type": "DeltaLakeLoad",
-          "name": "try to load some data",
-          "environments": [
-            "production",
-            "test"
-          ],
-          "inputView": "${inputView}",
-          "outputURI": "${outputURI}",
-          "authentication": {
-            "method": "AmazonAccessKey",
-            "accessKeyID": "${minioAccessKey}",
-            "secretAccessKey": "${minioSecretKey}",
-            "endpoint": "${minioHostPort}"
-          }          
-        },
         {
           "type": "DeltaLakeExtract",
           "name": "try to read some data",

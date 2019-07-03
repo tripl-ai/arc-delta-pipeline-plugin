@@ -53,7 +53,6 @@ class DeltaLakeLoadSuite extends FunSuite with BeforeAndAfter {
   }
 
   after {
-    session.stop
   }
 
   test("DeltaLakeLoadSuite: batch") {
