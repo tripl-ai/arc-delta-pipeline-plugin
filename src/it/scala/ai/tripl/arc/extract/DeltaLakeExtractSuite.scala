@@ -56,7 +56,6 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
 
   after {
     session.close
-    Thread.sleep(10000)
   }
 
   test("ZDeltaLakeExtractSuite: batch") {
