@@ -29,7 +29,7 @@ class DeltaLakeLoadSuite extends FunSuite with BeforeAndAfter {
   val bucketName = "test"
 
   // minio seems to need ip address not hostname
-  val minioHostPort = "http://localhost:9000"
+  val minioHostPort = "http://minio:9000"
   val minioAccessKey = "AKIAIOSFODNN7EXAMPLE"
   val minioSecretKey = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 
