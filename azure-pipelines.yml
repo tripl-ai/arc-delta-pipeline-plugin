@@ -5,8 +5,8 @@
 
 trigger:
 - master
-- release
 - develop
+- release/*
 - feature/*
 
 pool:
