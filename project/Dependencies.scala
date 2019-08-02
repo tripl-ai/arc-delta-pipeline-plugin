@@ -18,7 +18,7 @@ object Dependencies {
   val sparkSql = "org.apache.spark" %% "spark-sql" % sparkVersion % "provided"
 
   // kafka
-  val deltaCore = "io.delta" %% "delta-core" % "0.2.0"
+  val deltaCore = "io.delta" %% "delta-core" % "0.3.0"
 
   // Project
   val etlDeps = Seq(
