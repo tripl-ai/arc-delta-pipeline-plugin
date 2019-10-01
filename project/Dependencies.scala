@@ -11,14 +11,14 @@ object Dependencies {
   val hadoopAWS = "org.apache.hadoop" % "hadoop-aws" % hadoopVersion % "it"
 
   // arc
-  val arc = "ai.tripl" %% "arc" % "2.0.1" % "provided"
+  val arc = "ai.tripl" %% "arc" % "2.1.0" % "provided"
   val typesafeConfig = "com.typesafe" % "config" % "1.3.1" intransitive()  
 
   // spark
   val sparkSql = "org.apache.spark" %% "spark-sql" % sparkVersion % "provided"
 
   // kafka
-  val deltaCore = "io.delta" %% "delta-core" % "0.3.0"
+  val deltaCore = "io.delta" %% "delta-core" % "0.4.0"
 
   // Project
   val etlDeps = Seq(
