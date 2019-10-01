@@ -1,5 +1,11 @@
 ## Change Log
 
+# 1.2.0
+
+- bump to [Delta Lake 0.4.0](https://github.com/delta-io/delta/releases/tag/v0.4.0)
+- update to Arc 2.1.0
+- update to Scala 2.12.10
+
 # 1.1.1
 
 - update to Spark 2.4.4
