@@ -2,6 +2,8 @@ package ai.tripl.arc.load
 
 import java.net.URI
 import scala.collection.JavaConverters._
+import java.time.format.DateTimeFormatter
+import java.time.{Instant, ZoneId}
 
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
@@ -20,6 +22,10 @@ import ai.tripl.arc.util.ExtractUtils
 import ai.tripl.arc.util.MetadataUtils
 import ai.tripl.arc.util.ListenerUtils
 import ai.tripl.arc.util.Utils
+
+import io.delta.tables._
+import org.apache.spark.sql.delta._
+import org.apache.hadoop.fs.Path
 
 class DeltaLakeLoad extends PipelineStagePlugin {
 
@@ -155,6 +161,16 @@ object DeltaLakeLoadStage {
             }
           }
         }
+
+        // version logging
+        val deltaLog = DeltaLog.forTable(spark, new Path(stage.outputURI.toString))
+        val commitInfos = deltaLog.history.getHistory(Some(1))
+        val commitInfo = commitInfos(0)
+        val commitMap = new java.util.HashMap[String, Object]()
+        commitMap.put("version", java.lang.Long.valueOf(commitInfo.getVersion))
+        commitMap.put("timestamp", Instant.ofEpochMilli(commitInfo.getTimestamp).atZone(ZoneId.systemDefault).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+        stage.stageDetail.put("commit", commitMap)  
+
       }
     } catch {
       case e: Exception => throw new Exception(e) with DetailException {
