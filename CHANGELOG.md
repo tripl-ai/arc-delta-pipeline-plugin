@@ -1,5 +1,9 @@
 ## Change Log
 
+# 1.3.0
+
+- add logging of version/timestamp to `DeltaLakeExtract` and `DeltaLakeLoad`.
+
 # 1.2.0
 
 - bump to [Delta Lake 0.4.0](https://github.com/delta-io/delta/releases/tag/v0.4.0)

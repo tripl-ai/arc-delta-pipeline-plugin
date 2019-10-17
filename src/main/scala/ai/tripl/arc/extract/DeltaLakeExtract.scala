@@ -3,6 +3,8 @@ package ai.tripl.arc.extract
 import java.io._
 import java.net.URI
 import java.util.Properties
+import java.time.format.DateTimeFormatter
+import java.time.{Instant, ZoneId}
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
@@ -24,6 +26,11 @@ import ai.tripl.arc.util.EitherUtils._
 import ai.tripl.arc.util.ExtractUtils
 import ai.tripl.arc.util.MetadataUtils
 import ai.tripl.arc.util.Utils
+
+import io.delta.tables._
+import org.apache.spark.sql.delta._
+import org.apache.hadoop.fs.Path
+import org.apache.spark.sql.catalyst.expressions.Literal
 
 class DeltaLakeExtract extends PipelineStagePlugin {
 
@@ -109,13 +116,47 @@ object DeltaLakeExtractStage {
       if (arcContext.isStreaming) {
         spark.readStream.format("delta").options(stage.options).load(stage.input) 
       } else {
-        spark.read.format("delta").options(stage.options).load(stage.input) 
+        val df = spark.read.format("delta").options(stage.options).load(stage.input) 
+
+        // version logging
+        // this is useful for timestampAsOf as DeltaLake will extract the last timestamp EARLIER than the given timestamp 
+        // so the value passed in by the user is not nescessarily aligned with an actual version
+        val deltaLog = DeltaLog.forTable(spark, new Path(stage.input))
+        val commitInfos = deltaLog.history.getHistory(None)
+        val commitInfo = (stage.options.get("versionAsOf"), stage.options.get("timestampAsOf")) match {
+          case (None, None) => {
+            commitInfos.sortBy(_.version).reverse(0)
+          }
+          case (Some(versionAsOf), None) => {
+            val tt = DeltaTimeTravelSpec(None, Some(versionAsOf.toLong), None)
+            val (version, _) = DeltaTableUtils.resolveTimeTravelVersion(spark.sessionState.conf, deltaLog, tt)
+            commitInfos.filter { commit =>
+              commit.getVersion == version
+            }(0)
+          }
+          case (None, Some(timestampAsOf)) => {
+            val tt = DeltaTimeTravelSpec(Some(Literal(timestampAsOf)), None, None)
+            val (version, _) = DeltaTableUtils.resolveTimeTravelVersion(spark.sessionState.conf, deltaLog, tt)
+            commitInfos.filter { commit =>
+              commit.getVersion == version
+            }(0)    
+          }  
+          case (Some(_), Some(_)) => {
+            throw new Exception("invalid state please raise issue.")
+          }
+        }
+        val commitMap = new java.util.HashMap[String, Object]()
+        commitMap.put("version", java.lang.Long.valueOf(commitInfo.getVersion))
+        commitMap.put("timestamp", Instant.ofEpochMilli(commitInfo.getTimestamp).atZone(ZoneId.systemDefault).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+        stage.stageDetail.put("commit", commitMap)   
+        
+        df
       }
     } catch {
       case e: Exception => throw new Exception(e) with DetailException {
         override val detail = stage.stageDetail          
       }
-    }    
+    }   
 
     // repartition to distribute rows evenly
     val repartitionedDF = stage.partitionBy match {
