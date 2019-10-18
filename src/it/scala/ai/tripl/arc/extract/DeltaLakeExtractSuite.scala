@@ -24,7 +24,7 @@ import ai.tripl.arc.util.ControlUtils._
 
 class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
 
-  var session: SparkSession = _  
+  var session: SparkSession = _
 
   val bucketName = "test"
 
@@ -50,7 +50,7 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
     implicit val logger = TestUtils.getLogger()
 
     // set for deterministic timezone
-    spark.conf.set("spark.sql.session.timeZone", "UTC")       
+    spark.conf.set("spark.sql.session.timeZone", "UTC")
 
     session = spark
   }
@@ -83,8 +83,8 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
             "accessKeyID": "${minioAccessKey}",
             "secretAccessKey": "${minioSecretKey}",
             "endpoint": "${minioHostPort}"
-          }          
-        }                
+          }
+        }
       ]
     }"""
 
@@ -92,7 +92,7 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
 
     pipelineEither match {
       case Left(_) => {
-        println(pipelineEither)  
+        println(pipelineEither)
         assert(false)
       }
       case Right((pipeline, _)) => {
@@ -101,6 +101,6 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
     }
 
     // assert(spark.table(outputView).count == 2)
-  }    
+  }
 
 }
