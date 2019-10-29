@@ -1,5 +1,9 @@
 ## Change Log
 
+# 1.4.1
+
+- fix defect in `DeltaLakeLoad` to allow `options` to be specified.
+
 # 1.4.0
 
 - add `relativeVersion` in addition to `timestampAsOf` and `versionAsOf` options to allow users to specify a relative version where `0` is the latest and `-1` is the previous version.
