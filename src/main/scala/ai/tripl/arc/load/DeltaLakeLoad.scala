@@ -36,7 +36,7 @@ class DeltaLakeLoad extends PipelineStagePlugin {
     import ai.tripl.arc.config.ConfigUtils._
     implicit val c = config
 
-    val expectedKeys = "type" :: "name" :: "description" :: "environments" :: "inputView" :: "outputURI" :: "authentication" :: "numPartitions" :: "partitionBy" :: "saveMode" :: "replaceWhere" :: "mergeSchema" :: "overwriteSchema" :: "outputMode" :: "checkpointLocation" :: "params" :: Nil
+    val expectedKeys = "type" :: "name" :: "description" :: "environments" :: "inputView" :: "outputURI" :: "authentication" :: "numPartitions" :: "partitionBy" :: "saveMode" :: "replaceWhere" :: "mergeSchema" :: "overwriteSchema" :: "outputMode" :: "checkpointLocation" :: "params" :: "options" :: Nil
     val name = getValue[String]("name")
     val description = getOptionalValue[String]("description")
     val inputView = getValue[String]("inputView")
