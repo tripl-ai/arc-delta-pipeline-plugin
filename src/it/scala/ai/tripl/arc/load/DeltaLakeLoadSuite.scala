@@ -34,6 +34,10 @@ class DeltaLakeLoadSuite extends FunSuite with BeforeAndAfter {
   val minioAccessKey = "AKIAIOSFODNN7EXAMPLE"
   val minioSecretKey = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 
+  // these are write only permissions set in the docker-compose
+  val deltaUser = "deltaUser"
+  val deltaSecret = "deltaSecret"
+
   val outputURI = s"s3a://${bucketName}/delta"
 
   before {
@@ -89,15 +93,53 @@ class DeltaLakeLoadSuite extends FunSuite with BeforeAndAfter {
     val pipelineEither = ArcPipeline.parseConfig(Left(conf), arcContext)
 
     pipelineEither match {
-      case Left(_) => {
-        println(pipelineEither)  
-        assert(false)
-      }
+      case Left(err) => fail(err.toString)
       case Right((pipeline, _)) => {
         ARC.run(pipeline)
       }
     }
 
   }    
+
+  test("DeltaLakeLoadSuite: test s3 writeonly policy") {
+    implicit val spark = session
+    import spark.implicits._
+    implicit val logger = TestUtils.getLogger()
+    implicit val arcContext = TestUtils.getARCContext(isStreaming=false)
+
+    val dataset = TestUtils.getKnownDataset
+    dataset.createOrReplaceTempView(inputView)
+
+    val conf = s"""{
+      "stages": [
+        {
+          "type": "DeltaLakeLoad",
+          "name": "try to load some data",
+          "environments": [
+            "production",
+            "test"
+          ],
+          "inputView": "${inputView}",
+          "outputURI": "${outputURI}",
+          "authentication": {
+            "method": "AmazonAccessKey",
+            "accessKeyID": "${deltaUser}",
+            "secretAccessKey": "${deltaSecret}",
+            "endpoint": "${minioHostPort}"
+          }          
+        }
+      ]
+    }"""
+
+    val pipelineEither = ArcPipeline.parseConfig(Left(conf), arcContext)
+
+    pipelineEither match {
+      case Left(err) => fail(err.toString)
+      case Right((pipeline, _)) => {
+        ARC.run(pipeline)
+      }
+    }
+
+  }      
 
 }

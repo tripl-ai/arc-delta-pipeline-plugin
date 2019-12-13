@@ -23,7 +23,7 @@ import ai.tripl.arc.util.MetadataUtils
 import ai.tripl.arc.util.ListenerUtils
 import ai.tripl.arc.util.Utils
 
-import io.delta.tables._
+import io.delta.tables.DeltaTable
 import org.apache.spark.sql.delta._
 import org.apache.hadoop.fs.Path
 
@@ -36,7 +36,7 @@ class DeltaLakeLoad extends PipelineStagePlugin {
     import ai.tripl.arc.config.ConfigUtils._
     implicit val c = config
 
-    val expectedKeys = "type" :: "name" :: "description" :: "environments" :: "inputView" :: "outputURI" :: "authentication" :: "numPartitions" :: "partitionBy" :: "saveMode" :: "replaceWhere" :: "mergeSchema" :: "overwriteSchema" :: "outputMode" :: "checkpointLocation" :: "params" :: "options" :: Nil
+    val expectedKeys = "type" :: "name" :: "description" :: "environments" :: "inputView" :: "outputURI" :: "authentication" :: "numPartitions" :: "partitionBy" :: "saveMode" :: "replaceWhere" :: "mergeSchema" :: "overwriteSchema" :: "outputMode" :: "checkpointLocation" :: "params" :: "options" :: "generateSymlinkManifest" :: Nil
     val name = getValue[String]("name")
     val description = getOptionalValue[String]("description")
     val inputView = getValue[String]("inputView")
@@ -48,10 +48,11 @@ class DeltaLakeLoad extends PipelineStagePlugin {
     val outputMode = getValue[String]("outputMode", default = Some("Append"), validValues = "Append" :: "Complete" :: "Update" :: Nil) |> parseOutputModeType("outputMode") _
     val options = readMap("options", c)
     val params = readMap("params", c)
+    val generateSymlinkManifest = getValue[java.lang.Boolean]("generateSymlinkManifest", default = Some(true))
     val invalidKeys = checkValidKeys(c)(expectedKeys)  
 
-    (name, description, inputView, outputURI, numPartitions, authentication, saveMode, partitionBy, outputMode, invalidKeys) match {
-      case (Right(name), Right(description), Right(inputView), Right(outputURI), Right(numPartitions), Right(authentication), Right(saveMode), Right(partitionBy), Right(outputMode), Right(invalidKeys)) => 
+    (name, description, inputView, outputURI, numPartitions, authentication, saveMode, partitionBy, outputMode, generateSymlinkManifest, invalidKeys) match {
+      case (Right(name), Right(description), Right(inputView), Right(outputURI), Right(numPartitions), Right(authentication), Right(saveMode), Right(partitionBy), Right(outputMode), Right(generateSymlinkManifest), Right(invalidKeys)) => 
       
         val stage = DeltaLakeLoadStage(
           plugin=this,
@@ -65,6 +66,7 @@ class DeltaLakeLoad extends PipelineStagePlugin {
           saveMode=saveMode,
           options=options,
           outputMode=outputMode,
+          generateSymlinkManifest=generateSymlinkManifest,
           params=params
         )
 
@@ -73,10 +75,11 @@ class DeltaLakeLoad extends PipelineStagePlugin {
         stage.stageDetail.put("partitionBy", partitionBy.asJava)
         stage.stageDetail.put("saveMode", saveMode.toString.toLowerCase)
         stage.stageDetail.put("options", options.asJava)
+        stage.stageDetail.put("generateSymlinkManifest", generateSymlinkManifest)
 
         Right(stage)
       case _ =>
-        val allErrors: Errors = List(name, description, inputView, outputURI, numPartitions, authentication, saveMode, partitionBy, outputMode, invalidKeys).collect{ case Left(errs) => errs }.flatten
+        val allErrors: Errors = List(name, description, inputView, outputURI, numPartitions, authentication, saveMode, partitionBy, outputMode, generateSymlinkManifest, invalidKeys).collect{ case Left(errs) => errs }.flatten
         val stageName = stringOrDefault(name, "unnamed stage")
         val err = StageError(index, stageName, c.origin.lineNumber, allErrors)
         Left(err :: Nil)
@@ -97,7 +100,8 @@ case class DeltaLakeLoadStage(
     saveMode: SaveMode, 
     outputMode: OutputModeType, 
     params: Map[String, String],
-    options: Map[String, String]
+    options: Map[String, String],
+    generateSymlinkManifest: Boolean
   ) extends PipelineStage {
 
   override def execute()(implicit spark: SparkSession, logger: ai.tripl.arc.util.log.logger.Logger, arcContext: ARCContext): Option[DataFrame] = {
@@ -160,6 +164,12 @@ object DeltaLakeLoadStage {
               case None => nonNullDF.repartition(partitionCols:_*).write.format("delta").partitionBy(partitionBy:_*).mode(stage.saveMode).options(stage.options).save(stage.outputURI.toString)
             }
           }
+        }
+
+        // symlink generation to support presto reading the output
+        if (stage.generateSymlinkManifest) {
+          val deltaTable = DeltaTable.forPath(stage.outputURI.toString)
+          deltaTable.generate("symlink_format_manifest")          
         }
 
         // version logging
