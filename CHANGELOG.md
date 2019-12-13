@@ -1,5 +1,9 @@
 ## Change Log
 
+# 1.5.0
+
+- add `generateSymlinkManifest` option (default `true`) to `DeltaLakeLoad` to generate a manifest file which allows Presto to read the DeltaLake written records.
+
 # 1.4.1
 
 - fix defect in `DeltaLakeLoad` to allow `options` to be specified.
