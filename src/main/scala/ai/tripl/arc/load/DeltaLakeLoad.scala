@@ -46,7 +46,10 @@ class DeltaLakeLoad extends PipelineStagePlugin {
     val authentication = readAuthentication("authentication")  
     val saveMode = getValue[String]("saveMode", default = Some("Overwrite"), validValues = "Append" :: "ErrorIfExists" :: "Ignore" :: "Overwrite" :: Nil) |> parseSaveMode("saveMode") _
     val outputMode = getValue[String]("outputMode", default = Some("Append"), validValues = "Append" :: "Complete" :: "Update" :: Nil) |> parseOutputModeType("outputMode") _
-    val options = readMap("options", c)
+    val options = {
+      val userOptions = readMap("options", c)
+      userOptions ++ List(("overwriteSchema", userOptions.getOrElse("overwriteSchema", "true")))
+    }
     val params = readMap("params", c)
     val generateSymlinkManifest = getValue[java.lang.Boolean]("generateSymlinkManifest", default = Some(true))
     val invalidKeys = checkValidKeys(c)(expectedKeys)  

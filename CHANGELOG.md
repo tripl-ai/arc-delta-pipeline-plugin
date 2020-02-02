@@ -1,5 +1,9 @@
 ## Change Log
 
+# 1.5.1
+
+- default `overwriteSchema` to `true` (previously `false`) to ensure column metadata changes are persisted.
+
 # 1.5.0
 
 - add `generateSymlinkManifest` option (default `true`) to `DeltaLakeLoad` to generate a manifest file which allows Presto to read the DeltaLake written records.
