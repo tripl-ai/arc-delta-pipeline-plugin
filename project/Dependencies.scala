@@ -12,7 +12,7 @@ object Dependencies {
 
   // arc
   val arc = "ai.tripl" %% "arc" % "2.8.0" % "provided"
-  val typesafeConfig = "com.typesafe" % "config" % "1.3.1" intransitive()  
+  val typesafeConfig = "com.typesafe" % "config" % "1.3.1" intransitive()
 
   // spark
   val sparkSql = "org.apache.spark" %% "spark-sql" % sparkVersion % "provided"
@@ -25,12 +25,12 @@ object Dependencies {
     scalaTest,
     hadoopCommon,
     hadoopAWS,
-    
+
     arc,
     typesafeConfig,
 
     sparkSql,
-    
+
     deltaCore
   )
 }
