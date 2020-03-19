@@ -50,15 +50,15 @@ class DeltaLakeExtract extends PipelineStagePlugin {
     val outputView = getValue[String]("outputView")
     val persist = getValue[java.lang.Boolean]("persist", default = Some(false))
     val numPartitions = getOptionalValue[Int]("numPartitions")
-    val partitionBy = getValue[StringList]("partitionBy", default = Some(Nil)) 
+    val partitionBy = getValue[StringList]("partitionBy", default = Some(Nil))
     val timestampAsOf = getOptionalValue[String]("timestampAsOf")
     val timeTravel = readTimeTravel("options", c)
     val authentication = readAuthentication("authentication")
     val params = readMap("params", c)
-    val invalidKeys = checkValidKeys(c)(expectedKeys)    
+    val invalidKeys = checkValidKeys(c)(expectedKeys)
 
     (name, description, parsedGlob, outputView, authentication, persist, numPartitions, partitionBy, invalidKeys, timeTravel) match {
-      case (Right(name), Right(description), Right(parsedGlob), Right(outputView), Right(authentication), Right(persist), Right(numPartitions), Right(partitionBy), Right(invalidKeys), Right(timeTravel)) => 
+      case (Right(name), Right(description), Right(parsedGlob), Right(outputView), Right(authentication), Right(persist), Right(numPartitions), Right(partitionBy), Right(invalidKeys), Right(timeTravel)) =>
 
         val stage = DeltaLakeExtractStage(
           plugin=this,
@@ -74,24 +74,24 @@ class DeltaLakeExtract extends PipelineStagePlugin {
           timeTravel=timeTravel
         )
 
-        stage.stageDetail.put("input", parsedGlob) 
-        stage.stageDetail.put("outputView", outputView)  
-        stage.stageDetail.put("persist", java.lang.Boolean.valueOf(persist))                       
+        stage.stageDetail.put("input", parsedGlob)
+        stage.stageDetail.put("outputView", outputView)
+        stage.stageDetail.put("persist", java.lang.Boolean.valueOf(persist))
 
         val optionsMap = new java.util.HashMap[String, Object]()
         for (timeTravel <- timeTravel) {
           for (relativeVersion <- timeTravel.relativeVersion) {
             optionsMap.put("relativeVersion", java.lang.Long.valueOf(relativeVersion))
-            stage.stageDetail.put("options", optionsMap)  
-          } 
+            stage.stageDetail.put("options", optionsMap)
+          }
           for (timestampAsOf <- timeTravel.timestampAsOf) {
             optionsMap.put("timestampAsOf", timestampAsOf)
-            stage.stageDetail.put("options", optionsMap)  
+            stage.stageDetail.put("options", optionsMap)
           }
           for (versionAsOf <- timeTravel.versionAsOf) {
             optionsMap.put("versionAsOf", java.lang.Long.valueOf(versionAsOf))
-            stage.stageDetail.put("options", optionsMap)  
-          }          
+            stage.stageDetail.put("options", optionsMap)
+          }
         }
 
         Right(stage)
@@ -109,11 +109,11 @@ class DeltaLakeExtract extends PipelineStagePlugin {
 
     def err(lineNumber: Option[Int], msg: String): Either[Errors, Option[TimeTravel]] = Left(ConfigError(path, lineNumber, msg) :: Nil)
 
-    if (c.hasPath(path)) {   
+    if (c.hasPath(path)) {
       try {
         val config = c.getConfig(path)
         val expectedKeys = "relativeVersion" :: "timestampAsOf" :: "versionAsOf" :: Nil
-        val invalidKeys = checkValidKeys(config)(expectedKeys)    
+        val invalidKeys = checkValidKeys(config)(expectedKeys)
         (invalidKeys) match {
           case Right(_) => {
             (config.hasPath("relativeVersion"), config.hasPath("timestampAsOf"), config.hasPath("versionAsOf")) match {
@@ -129,13 +129,13 @@ class DeltaLakeExtract extends PipelineStagePlugin {
               case (false, false, true) => Right(Some(TimeTravel(None, None, Option(config.getInt("versionAsOf")))))
               case (false, false, false) => Right(None)
               case _ => throw new Exception(s"Only one of ['relativeVersion', 'timestampAsOf', 'versionAsOf'] is supported for time travel.")
-            }            
+            }
           }
           case Left(invalidKeys) => Left(invalidKeys)
         }
       } catch {
         case e: Exception => err(Some(c.getValue(path).origin.lineNumber()), s"Unable to read config value: ${e.getMessage}")
-      }        
+      }
     } else {
       Right(None)
     }
@@ -150,14 +150,14 @@ case class TimeTravel(
 
 case class DeltaLakeExtractStage(
     plugin: DeltaLakeExtract,
-    name: String, 
-    description: Option[String], 
-    input: String, 
-    outputView: String, 
+    name: String,
+    description: Option[String],
+    input: String,
+    outputView: String,
     authentication: Option[Authentication],
-    params: Map[String, String], 
-    persist: Boolean, 
-    numPartitions: Option[Int], 
+    params: Map[String, String],
+    persist: Boolean,
+    numPartitions: Option[Int],
     partitionBy: List[String],
     timeTravel: Option[TimeTravel]
   ) extends PipelineStage {
@@ -175,7 +175,7 @@ object DeltaLakeExtractStage {
 
     val df = try {
       if (arcContext.isStreaming) {
-        spark.readStream.format("delta").load(stage.input) 
+        spark.readStream.format("delta").load(stage.input)
       } else {
 
         // get history to allow additional logic
@@ -209,10 +209,10 @@ object DeltaLakeExtractStage {
         }
 
         // read the data
-        val df = spark.read.format("delta").options(optionsMap).load(stage.input) 
+        val df = spark.read.format("delta").options(optionsMap).load(stage.input)
 
         // version logging
-        // this is useful for timestampAsOf as DeltaLake will extract the last timestamp EARLIER than the given timestamp 
+        // this is useful for timestampAsOf as DeltaLake will extract the last timestamp EARLIER than the given timestamp
         // so the value passed in by the user is not nescessarily aligned with an actual version
         val commitInfo = (optionsMap.asScala.get("versionAsOf"), optionsMap.asScala.get("timestampAsOf")) match {
           case (None, None) => {
@@ -230,8 +230,8 @@ object DeltaLakeExtractStage {
             val (version, _) = DeltaTableUtils.resolveTimeTravelVersion(spark.sessionState.conf, deltaLog, tt)
             commitInfos.filter { commit =>
               commit.getVersion == version
-            }(0)    
-          }  
+            }(0)
+          }
           case (Some(_), Some(_)) => {
             throw new Exception("invalid state please raise issue.")
           }
@@ -239,23 +239,23 @@ object DeltaLakeExtractStage {
         val commitMap = new java.util.HashMap[String, Object]()
         commitMap.put("version", java.lang.Long.valueOf(commitInfo.getVersion))
         commitMap.put("timestamp", Instant.ofEpochMilli(commitInfo.getTimestamp).atZone(ZoneId.systemDefault).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
-        stage.stageDetail.put("commit", commitMap)   
-        
+        stage.stageDetail.put("commit", commitMap)
+
         df
       }
     } catch {
       case e: Exception => throw new Exception(e) with DetailException {
-        override val detail = stage.stageDetail          
+        override val detail = stage.stageDetail
       }
-    }   
+    }
 
     // repartition to distribute rows evenly
     val repartitionedDF = stage.partitionBy match {
-      case Nil => { 
+      case Nil => {
         stage.numPartitions match {
           case Some(numPartitions) => df.repartition(numPartitions)
           case None => df
-        }   
+        }
       }
       case partitionBy => {
         // create a column array for repartitioning
@@ -265,9 +265,9 @@ object DeltaLakeExtractStage {
           case None => df.repartition(partitionCols:_*)
         }
       }
-    } 
+    }
     repartitionedDF.createOrReplaceTempView(stage.outputView)
-    
+
     if (!repartitionedDF.isStreaming) {
       stage.stageDetail.put("inputFiles", Integer.valueOf(repartitionedDF.inputFiles.length))
       stage.stageDetail.put("outputColumns", Integer.valueOf(repartitionedDF.schema.length))
@@ -275,8 +275,8 @@ object DeltaLakeExtractStage {
 
       if (stage.persist) {
         repartitionedDF.persist(arcContext.storageLevel)
-        stage.stageDetail.put("records", java.lang.Long.valueOf(repartitionedDF.count)) 
-      }      
+        stage.stageDetail.put("records", java.lang.Long.valueOf(repartitionedDF.count))
+      }
     }
 
     Option(repartitionedDF)

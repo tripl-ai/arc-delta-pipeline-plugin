@@ -6,9 +6,13 @@
 .metals
 derby.log
 makefile
-project/project/
+project/project
 project/target
+project/metals.sbt
 spark-warehouse
 spark/
 target
 tmp
+.metals/
+.bloop/
+metals.sbt

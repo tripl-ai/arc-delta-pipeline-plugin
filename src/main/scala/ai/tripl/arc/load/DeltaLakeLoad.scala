@@ -43,17 +43,20 @@ class DeltaLakeLoad extends PipelineStagePlugin {
     val outputURI = getValue[String]("outputURI") |> parseURI("outputURI") _
     val partitionBy = getValue[StringList]("partitionBy", default = Some(Nil))
     val numPartitions = getOptionalValue[Int]("numPartitions")
-    val authentication = readAuthentication("authentication")  
+    val authentication = readAuthentication("authentication")
     val saveMode = getValue[String]("saveMode", default = Some("Overwrite"), validValues = "Append" :: "ErrorIfExists" :: "Ignore" :: "Overwrite" :: Nil) |> parseSaveMode("saveMode") _
     val outputMode = getValue[String]("outputMode", default = Some("Append"), validValues = "Append" :: "Complete" :: "Update" :: Nil) |> parseOutputModeType("outputMode") _
-    val options = readMap("options", c)
+    val options = {
+      val userOptions = readMap("options", c)
+      userOptions ++ List(("overwriteSchema", userOptions.getOrElse("overwriteSchema", "true")))
+    }
     val params = readMap("params", c)
     val generateSymlinkManifest = getValue[java.lang.Boolean]("generateSymlinkManifest", default = Some(true))
-    val invalidKeys = checkValidKeys(c)(expectedKeys)  
+    val invalidKeys = checkValidKeys(c)(expectedKeys)
 
     (name, description, inputView, outputURI, numPartitions, authentication, saveMode, partitionBy, outputMode, generateSymlinkManifest, invalidKeys) match {
-      case (Right(name), Right(description), Right(inputView), Right(outputURI), Right(numPartitions), Right(authentication), Right(saveMode), Right(partitionBy), Right(outputMode), Right(generateSymlinkManifest), Right(invalidKeys)) => 
-      
+      case (Right(name), Right(description), Right(inputView), Right(outputURI), Right(numPartitions), Right(authentication), Right(saveMode), Right(partitionBy), Right(outputMode), Right(generateSymlinkManifest), Right(invalidKeys)) =>
+
         val stage = DeltaLakeLoadStage(
           plugin=this,
           name=name,
@@ -70,8 +73,8 @@ class DeltaLakeLoad extends PipelineStagePlugin {
           params=params
         )
 
-        stage.stageDetail.put("inputView", inputView)  
-        stage.stageDetail.put("outputURI", outputURI.toString)  
+        stage.stageDetail.put("inputView", inputView)
+        stage.stageDetail.put("outputURI", outputURI.toString)
         stage.stageDetail.put("partitionBy", partitionBy.asJava)
         stage.stageDetail.put("saveMode", saveMode.toString.toLowerCase)
         stage.stageDetail.put("options", options.asJava)
@@ -90,15 +93,15 @@ class DeltaLakeLoad extends PipelineStagePlugin {
 
 case class DeltaLakeLoadStage(
     plugin: DeltaLakeLoad,
-    name: String, 
-    description: Option[String], 
-    inputView: String, 
-    outputURI: URI, 
-    partitionBy: List[String], 
-    numPartitions: Option[Int], 
-    authentication: Option[Authentication], 
-    saveMode: SaveMode, 
-    outputMode: OutputModeType, 
+    name: String,
+    description: Option[String],
+    inputView: String,
+    outputURI: URI,
+    partitionBy: List[String],
+    numPartitions: Option[Int],
+    authentication: Option[Authentication],
+    saveMode: SaveMode,
+    outputMode: OutputModeType,
     params: Map[String, String],
     options: Map[String, String],
     generateSymlinkManifest: Boolean
@@ -113,7 +116,7 @@ object DeltaLakeLoadStage {
 
   def execute(stage: DeltaLakeLoadStage)(implicit spark: SparkSession, logger: ai.tripl.arc.util.log.logger.Logger, arcContext: ARCContext): Option[DataFrame] = {
 
-    val df = spark.table(stage.inputView)   
+    val df = spark.table(stage.inputView)
 
     if (!df.isStreaming) {
       stage.numPartitions match {
@@ -169,7 +172,7 @@ object DeltaLakeLoadStage {
         // symlink generation to support presto reading the output
         if (stage.generateSymlinkManifest) {
           val deltaTable = DeltaTable.forPath(stage.outputURI.toString)
-          deltaTable.generate("symlink_format_manifest")          
+          deltaTable.generate("symlink_format_manifest")
         }
 
         // version logging
@@ -179,7 +182,7 @@ object DeltaLakeLoadStage {
         val commitMap = new java.util.HashMap[String, Object]()
         commitMap.put("version", java.lang.Long.valueOf(commitInfo.getVersion))
         commitMap.put("timestamp", Instant.ofEpochMilli(commitInfo.getTimestamp).atZone(ZoneId.systemDefault).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
-        stage.stageDetail.put("commit", commitMap)  
+        stage.stageDetail.put("commit", commitMap)
 
       }
     } catch {
@@ -188,7 +191,7 @@ object DeltaLakeLoadStage {
       }
     }
 
-    spark.sparkContext.removeSparkListener(listener)           
+    spark.sparkContext.removeSparkListener(listener)
 
     Option(nonNullDF)
   }
