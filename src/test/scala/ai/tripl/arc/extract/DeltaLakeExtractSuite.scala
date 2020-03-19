@@ -77,15 +77,13 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
     val pipelineEither = ArcPipeline.parseConfig(Left(conf), arcContext)
 
     pipelineEither match {
-      case Left(err) => {
-        println(err)
-        assert(false)
-      }
+      case Left(err) => fail(err.toString)
       case Right((pipeline, _)) => {
-        val df = ARC.run(pipeline)(spark, logger, arcContext)
+        val df = ARC.run(pipeline)(spark, logger, arcContext).get
+        assert(df.first.getInt(0) == 2)
       }
     }
-  }  
+  }
 
   test("DeltaLakeExtract: read versionAsOf") {
     implicit val spark = session
@@ -122,15 +120,13 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
     val pipelineEither = ArcPipeline.parseConfig(Left(conf), arcContext)
 
     pipelineEither match {
-      case Left(err) => {
-        println(err)
-        assert(false)
-      }
+      case Left(err) => fail(err.toString)
       case Right((pipeline, _)) => {
-        val df = ARC.run(pipeline)(spark, logger, arcContext)
+        val df = ARC.run(pipeline)(spark, logger, arcContext).get
+        assert(df.first.getInt(0) == 1)
       }
     }
-  }    
+  }
 
   test("DeltaLakeExtract: batch relative version") {
     implicit val spark = session
@@ -220,14 +216,10 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
     val pipelineEither = ArcPipeline.parseConfig(Left(conf), arcContext)
 
     pipelineEither match {
-      case Left(err) => {
-        println(err)
-        // should throw error
-        assert(true)
-      }
+      case Left(err) => assert(err.toString.contains("Invalid attribute 'rAlativeVersion'. Perhaps you meant one of: ['relativeVersion']."))
       case Right((_, _)) => {
         assert(false)
       }
     }
-  }  
+  }
 }
