@@ -96,10 +96,10 @@ class DeltaLakeMergeLoadSuite extends FunSuite with BeforeAndAfter {
       case Right((pipeline, _)) => {
         val df = ARC.run(pipeline)(spark, logger, arcContext).get
 
-        val df0 = spark.read.format("delta").option("versionAsOf", 0).load(output).withColumn("_filename", input_file_name())
-        val df1 = spark.read.format("delta").option("versionAsOf", 1).load(output).withColumn("_filename", input_file_name())
-        df0.show(false)
-        df1.show(false)
+        val df0 = spark.read.format("delta").option("versionAsOf", 0).load(output).withColumn("_filename", input_file_name()).orderBy(col("key"))
+        val df1 = spark.read.format("delta").option("versionAsOf", 1).load(output).withColumn("_filename", input_file_name()).orderBy(col("key"))
+
+        df0.joinWith(df1, df0("_filename") === df1("_filename"), "full").show(false)
         // val changes = spark.read.option("wholetext", "true").text(s"${output}/_delta_log/00000000000000000001.json").collect.mkString("\n")
         // val addFiles = addPattern.findAllMatchIn(changes).map(m => m.group(1)).toSet
         // val removeFiles = removePattern.findAllMatchIn(changes).map(m => m.group(1)).toSet
