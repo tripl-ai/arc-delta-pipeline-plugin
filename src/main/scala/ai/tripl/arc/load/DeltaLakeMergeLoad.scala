@@ -163,6 +163,7 @@ case class DeltaLakeMergeLoadStage(
     inputView: String,
     outputURI: URI,
     condition: String,
+    
     whenNotMatchedInsert: Option[WhenNotMatchedInsert],
     whenMatchedUpdate: Option[WhenMatchedUpdate],
     whenMatchedDelete: Option[WhenMatchedDelete],
@@ -185,9 +186,9 @@ object DeltaLakeMergeLoadStage {
     // set write permissions
     CloudUtils.setHadoopConfiguration(stage.authentication)
 
-    val listener = ListenerUtils.addStageCompletedListener(stage.stageDetail)
-
     try {
+
+        // build the operation
         var deltaMergeOperation = DeltaTable.forPath(stage.outputURI.toString).as("target")
           .merge(
             df.as("source"),
@@ -196,7 +197,7 @@ object DeltaLakeMergeLoadStage {
         // if delete
         for (whenMatchedDelete <- stage.whenMatchedDelete) {
           for (deleteCondition <- whenMatchedDelete.condition) {
-              deltaMergeOperation = deltaMergeOperation.whenMatched(deleteCondition).delete()
+            deltaMergeOperation = deltaMergeOperation.whenMatched(deleteCondition).delete()
           }
         }
 
@@ -211,13 +212,14 @@ object DeltaLakeMergeLoadStage {
         // if insert
         for (whenNotMatchedInsert <- stage.whenNotMatchedInsert) {
           (whenNotMatchedInsert.condition, whenNotMatchedInsert.values) match {
-            case (Some(condition), Some(values)) => deltaMergeOperation.whenNotMatched(condition).updateExpr(updateMap)
-            case (Some(condition), None) => deltaMergeOperation.whenNotMatched(condition).updateAll() 
-            case (None, Some(values)) => deltaMergeOperation.whenNotMatched().updateAll()
-            case (None, None) =>
+            case (Some(condition), Some(values)) => deltaMergeOperation = deltaMergeOperation.whenNotMatched(condition).insertExpr(values)
+            case (Some(condition), None) => deltaMergeOperation = deltaMergeOperation.whenNotMatched(condition).insertAll() 
+            case (None, Some(values)) => deltaMergeOperation = deltaMergeOperation.whenNotMatched().insertExpr(values)
+            case (None, None) => deltaMergeOperation = deltaMergeOperation.whenNotMatched().insertAll()
           }
         }
 
+        // execute
         deltaMergeOperation.execute()
 
         // symlink generation to support presto reading the output
@@ -240,8 +242,6 @@ object DeltaLakeMergeLoadStage {
         override val detail = stage.stageDetail
       }
     }
-
-    spark.sparkContext.removeSparkListener(listener)
 
     Option(df)
   }
