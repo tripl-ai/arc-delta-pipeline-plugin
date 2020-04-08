@@ -33,10 +33,9 @@ class DeltaLakeMergeLoadSuite extends FunSuite with BeforeAndAfter {
                   .builder()
                   .master("local[*]")
                   .config("spark.ui.port", "9999")
-                  .config("spark.databricks.delta.merge.optimizeInsertOnlyMerge.enabled", false)
                   .appName("Spark ETL Test")
                   .getOrCreate()
-    spark.sparkContext.setLogLevel("DEBUG")
+    spark.sparkContext.setLogLevel("INFO")
 
     // set for deterministic timezone
     spark.conf.set("spark.sql.session.timeZone", "UTC")
@@ -68,8 +67,8 @@ class DeltaLakeMergeLoadSuite extends FunSuite with BeforeAndAfter {
     val output = s"${FileUtils.getTempDirectoryPath}/${testUUID}"
 
     // create overlapping datasets with insert, update and delete cases
-    Seq((0, "a"),(1, "b"),(2, "c")).toDF("key", "value").write.format("delta").mode("overwrite").save(output)
-    Seq((1, "b"),(2, "c"),(3, "d")).toDF("key", "value").createOrReplaceTempView(inputView)
+    Seq((0, "a"),(1, "b"),(2, "c"),(3, "d"),(4, "e")).toDF("key", "value").write.format("delta").mode("overwrite").save(output)
+    Seq((2, "c"),(3, "z"),(4, "y"),(5, "f"),(6, "g")).toDF("key", "value").createOrReplaceTempView(inputView)
 
     val conf = s"""{
       "stages": [
@@ -84,7 +83,26 @@ class DeltaLakeMergeLoadSuite extends FunSuite with BeforeAndAfter {
           "outputURI": "${output}",
           "inputView": "${inputView}",
           "condition": "source.key = target.key",
-          "whenNotMatchedInsert": {}
+          "whenMatchedDelete": {
+            "condition": "source.key = 2"
+          },
+          "whenMatchedUpdate": {
+            "condition": "source.key = 3",
+            "values": {
+              "key": "source.key",
+              "value": "source.value"
+            }
+          },
+          "whenNotMatchedByTargetInsert": {
+            "condition": "source.key = 5",
+            "values": {
+              "key": "source.key",
+              "value": "source.value"
+            }
+          },
+          "whenNotMatchedBySourceDelete": {
+            "condition": "target.key = 1"
+          }
         }
       ]
     }"""
@@ -98,71 +116,22 @@ class DeltaLakeMergeLoadSuite extends FunSuite with BeforeAndAfter {
 
         val df0 = spark.read.format("delta").option("versionAsOf", 0).load(output).withColumn("_filename", input_file_name()).orderBy(col("key"))
         val df1 = spark.read.format("delta").option("versionAsOf", 1).load(output).withColumn("_filename", input_file_name()).orderBy(col("key"))
+        val join = df0.joinWith(df1, df0("key") === df1("key"), "full")
 
-        df0.joinWith(df1, df0("_filename") === df1("_filename"), "full").show(false)
-        // val changes = spark.read.option("wholetext", "true").text(s"${output}/_delta_log/00000000000000000001.json").collect.mkString("\n")
-        // val addFiles = addPattern.findAllMatchIn(changes).map(m => m.group(1)).toSet
-        // val removeFiles = removePattern.findAllMatchIn(changes).map(m => m.group(1)).toSet
+        val KEY = 0
+        val VALUE = 1
+        val FILENAME = 2
+        val rows = join.collect
 
-        // println(addFiles)
-        // println(removeFiles)        
+        assert(rows.filter { case(v0,v1) => v0 != null && v0.getInt(KEY) == 0 && v1 != null && v1.getInt(KEY) == 0 }.length == 1, "key 0 not deleted as per whenNotMatchedBySourceDelete.condition")
+        assert(rows.filter { case(v0,v1) => v0 != null && v0.getInt(KEY) == 1 && v1 == null }.length == 1, "key 1 deleted as per whenNotMatchedBySourceDelete.condition")
+        assert(rows.filter { case(v0,v1) => v0 != null && v0.getInt(KEY) == 2 && v1 == null }.length == 1, "key 2 deleted as per whenMatchedDelete.condition")
+        assert(rows.filter { case(v0,v1) => v0 != null && v0.getInt(KEY) == 3 && v1 != null && v1.getString(VALUE) == "z" }.length == 1, "key 3 updated as per whenMatchedUpdate.condition")
+        assert(rows.filter { case(v0,v1) => v0 != null && v0.getInt(KEY) == 4 && v1 != null && v0.getString(VALUE) == v1.getString(VALUE) && v0.getString(FILENAME) == v1.getString(FILENAME)}.length == 1, "key 4 not updated as per whenMatchedUpdate.condition")
+        assert(rows.filter { case(v0,v1) => v0 == null && v1 != null && v1.getInt(KEY) == 5 && v1 != null }.length == 1, "key 5 inserted as per whenNotMatchedByTargetInsert.condition")
+        assert(rows.filter { case(v0,v1) => v1 != null && v1.getInt(KEY) == 6 }.length == 0, "key 6 not nserted as per whenNotMatchedByTargetInsert.condition")
       }
     }
-  }
-
-//   test("DeltaLakeMergeLoad: converge") {
-//     implicit val spark = session
-//     import spark.implicits._
-//     implicit val logger = TestUtils.getLogger()
-//     implicit val arcContext = TestUtils.getARCContext(isStreaming=false)
-
-
-//     val addPattern = "add.*(part-[^\"]*)".r
-//     val removePattern = "remove.*(part-[^\"]*)".r
-
-//     val testUUID = UUID.randomUUID.toString
-//     val output = s"${FileUtils.getTempDirectoryPath}/${testUUID}"
-
-//     val df0 = spark.sqlContext.range(0, 10).repartition(10, col("id"))
-
-//     df0.write.format("delta").mode("overwrite").save(output)
-
-
-//     for (i <- 1 to 2) {
-
-//       // println(s"\n00000000000000000000${(i-1).toString}.json")
-//       // spark.read.text(s"${output}/_delta_log/0000000000000000000${(i-1).toString}.json").collect.foreach { row =>
-//       //   val value = row.getString(0)
-//       //   println(value)
-//       // }
-
-//       val changes = spark.read.option("wholetext", "true").text(s"${output}/_delta_log/0000000000000000000${(i-1).toString}.json").collect.mkString("\n")
-//       val addFiles = addPattern.findAllMatchIn(changes).map(m => m.group(1)).toSet
-//       val removeFiles = removePattern.findAllMatchIn(changes).map(m => m.group(1)).toSet
-
-//       println(addFiles)
-//       println(removeFiles)
-
-//       val df1 = spark.sqlContext.range(i, i+10).repartition(10, col("id"))
-
-//       val deltaTable = DeltaTable.forPath(spark, output)
-
-//       deltaTable
-//         .as("target")
-//         .converge(
-//           df1.as("source"),
-//           "source.id = target.id"
-//         )
-        
-//       // println(s"\n0000000000000000000${i.toString}.json")
-//       // spark.read.text(s"${output}/_delta_log/0000000000000000000${i.toString}.json").collect.foreach { row =>
-//       //   val value = row.getString(0)
-//       //   println(value)
-//       // }
-
-//       // spark.read.format("delta").option("versionAsOf", i-1).load(output).withColumn("input_file_name", input_file_name).show(false)
-//       // spark.read.format("delta").option("versionAsOf", i).load(output).withColumn("input_file_name", input_file_name).show(false)
-//     }
-//   }  
+  }  
 
 }

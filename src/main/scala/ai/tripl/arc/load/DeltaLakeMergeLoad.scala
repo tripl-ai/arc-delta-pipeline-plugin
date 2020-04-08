@@ -36,7 +36,7 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin {
     import ai.tripl.arc.config.ConfigUtils._
     implicit val c = config
 
-    val expectedKeys = "type" :: "name" :: "description" :: "environments" :: "inputView" :: "outputURI" :: "authentication" :: "params" :: "generateSymlinkManifest" :: "condition" :: "whenNotMatchedInsert" :: "whenMatchedUpdate" :: "whenMatchedDelete" :: Nil
+    val expectedKeys = "type" :: "name" :: "description" :: "environments" :: "inputView" :: "outputURI" :: "authentication" :: "params" :: "generateSymlinkManifest" :: "condition" :: "whenNotMatchedByTargetInsert" :: "whenNotMatchedBySourceDelete" :: "whenMatchedUpdate" :: "whenMatchedDelete" :: Nil
     val name = getValue[String]("name")
     val description = getOptionalValue[String]("description")
     val inputView = getValue[String]("inputView")
@@ -46,12 +46,12 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin {
     // merge condition
     val condition = getValue[String]("condition")
 
-    // read insert
-    val whenNotMatchedInsert = c.hasPath("whenNotMatchedInsert") 
-    val (whenNotMatchedInsertCondition, whenNotMatchedInsertValues) = if (whenNotMatchedInsert) {
-      val condition = getOptionalValue[String]("whenNotMatchedInsert.condition")
-      val values = if (c.hasPath("whenNotMatchedInsert.values")) {
-        Option(readMap("whenNotMatchedInsert.values", c))
+    // read not matched by target insert
+    val whenNotMatchedByTargetInsert = c.hasPath("whenNotMatchedByTargetInsert") 
+    val (whenNotMatchedByTargetInsertCondition, whenNotMatchedByTargetInsertValues) = if (whenNotMatchedByTargetInsert) {
+      val condition = getOptionalValue[String]("whenNotMatchedByTargetInsert.condition")
+      val values = if (c.hasPath("whenNotMatchedByTargetInsert.values")) {
+        Option(readMap("whenNotMatchedByTargetInsert.values", c))
       } else {
         None
       }
@@ -60,8 +60,13 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin {
       (Right(None), None)
     }
 
+    // read not matched by source delete
+    val whenNotMatchedBySourceDelete = c.hasPath("whenNotMatchedBySourceDelete") 
+    val whenNotMatchedBySourceDeleteCondition = getOptionalValue[String]("whenNotMatchedBySourceDelete.condition") 
+
     // read update
     val whenMatchedUpdate = c.hasPath("whenMatchedUpdate") 
+    val whenMatchedUpdateCondition = getOptionalValue[String]("whenMatchedUpdate.condition")
     val whenMatchedUpdateValues = if (c.hasPath("whenMatchedUpdate.values")) {
       Option(readMap("whenMatchedUpdate.values", c))
     } else {
@@ -71,12 +76,15 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin {
     // read delete
     val whenMatchedDelete = c.hasPath("whenMatchedDelete") 
     val whenMatchedDeleteCondition = getOptionalValue[String]("whenMatchedDelete.condition")
+
+
+
     val params = readMap("params", c)
     val generateSymlinkManifest = getValue[java.lang.Boolean]("generateSymlinkManifest", default = Some(true))
     val invalidKeys = checkValidKeys(c)(expectedKeys)
 
-    (name, description, inputView, outputURI, authentication, generateSymlinkManifest, condition, whenNotMatchedInsertCondition, whenMatchedDeleteCondition, invalidKeys) match {
-      case (Right(name), Right(description), Right(inputView), Right(outputURI), Right(authentication), Right(generateSymlinkManifest), Right(condition), Right(whenNotMatchedInsertCondition), Right(whenMatchedDeleteCondition), Right(invalidKeys)) =>
+    (name, description, inputView, outputURI, authentication, generateSymlinkManifest, condition, whenNotMatchedByTargetInsertCondition, whenNotMatchedBySourceDeleteCondition, whenMatchedUpdateCondition, whenMatchedDeleteCondition, invalidKeys) match {
+      case (Right(name), Right(description), Right(inputView), Right(outputURI), Right(authentication), Right(generateSymlinkManifest), Right(condition), Right(whenNotMatchedByTargetInsertCondition), Right(whenNotMatchedBySourceDeleteCondition), Right(whenMatchedUpdateCondition), Right(whenMatchedDeleteCondition), Right(invalidKeys)) =>
 
         val stage = DeltaLakeMergeLoadStage(
           plugin=this,
@@ -88,9 +96,10 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin {
           params=params,
           generateSymlinkManifest=generateSymlinkManifest,          
           condition=condition,
-          whenNotMatchedInsert=if (whenNotMatchedInsert) { Option(WhenNotMatchedInsert(whenNotMatchedInsertCondition, whenNotMatchedInsertValues)) } else None,
-          whenMatchedUpdate=if (whenMatchedUpdate) { Option(WhenMatchedUpdate(whenMatchedUpdateValues)) } else None,
-          whenMatchedDelete=if (whenMatchedDelete) { Option(WhenMatchedDelete(whenMatchedDeleteCondition)) } else None
+          whenNotMatchedByTargetInsert= if (whenNotMatchedByTargetInsert) { Option(WhenNotMatchedByTargetInsert(whenNotMatchedByTargetInsertCondition, whenNotMatchedByTargetInsertValues)) } else None,
+          whenNotMatchedBySourceDelete= if (whenNotMatchedBySourceDelete) { Option(WhenNotMatchedBySourceDelete(whenNotMatchedBySourceDeleteCondition)) } else None,
+          whenMatchedUpdate= if (whenMatchedUpdate) { Option(WhenMatchedUpdate(whenMatchedUpdateCondition, whenMatchedUpdateValues)) } else None,
+          whenMatchedDelete= if (whenMatchedDelete) { Option(WhenMatchedDelete(whenMatchedDeleteCondition)) } else None
         )
 
         // logging
@@ -98,23 +107,30 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin {
         stage.stageDetail.put("outputURI", outputURI.toString)
         stage.stageDetail.put("generateSymlinkManifest", generateSymlinkManifest)
         stage.stageDetail.put("condition", condition)
-        if (whenNotMatchedInsert) {
-          val whenNotMatchedInsertMap = new java.util.HashMap[String, Object]()
-          for (whenNotMatchedInsertCondition <- whenNotMatchedInsertCondition) {
-            whenNotMatchedInsertMap.put("condition", whenNotMatchedInsertCondition)
-          }
-          whenNotMatchedInsertValues match {
+
+
+        if (whenNotMatchedByTargetInsert) {
+          val whenNotMatchedByTargetInsertMap = new java.util.HashMap[String, Object]()
+          whenNotMatchedByTargetInsertCondition.map{ whenNotMatchedByTargetInsertMap.put("condition", _) }
+          whenNotMatchedByTargetInsertValues match {
             case Some(values) => {
-              whenNotMatchedInsertMap.put("values", values.asJava)
-              whenNotMatchedInsertMap.put("insertAll", java.lang.Boolean.valueOf(false))
+              whenNotMatchedByTargetInsertMap.put("values", values.asJava)
+              whenNotMatchedByTargetInsertMap.put("insertAll", java.lang.Boolean.valueOf(false))
             }
-            case None => whenNotMatchedInsertMap.put("insertAll", java.lang.Boolean.valueOf(true))
+            case None => whenNotMatchedByTargetInsertMap.put("insertAll", java.lang.Boolean.valueOf(true))
           }
-          stage.stageDetail.put("whenNotMatchedInsert", whenNotMatchedInsertMap)
+          stage.stageDetail.put("whenNotMatchedByTargetInsert", whenNotMatchedByTargetInsertMap)
         }
+
+        if (whenNotMatchedBySourceDelete) {
+          val whenNotMatchedBySourceDeleteMap = new java.util.HashMap[String, Object]()
+          whenNotMatchedBySourceDeleteCondition.map{ whenNotMatchedBySourceDeleteMap.put("condition", _) }
+          stage.stageDetail.put("whenNotMatchedBySourceDelete", whenNotMatchedBySourceDeleteMap)
+        }   
 
         if (whenMatchedUpdate) {
           val whenMatchedUpdateMap = new java.util.HashMap[String, Object]()
+          whenMatchedUpdateCondition.map{ whenMatchedUpdateMap.put("condition", _) }
           whenMatchedUpdateValues match {
             case Some(values) => {
               whenMatchedUpdateMap.put("values", values.asJava)
@@ -127,15 +143,13 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin {
 
         if (whenMatchedDelete) {
           val whenMatchedDeleteMap = new java.util.HashMap[String, Object]()
-          for (whenMatchedDeleteCondition <- whenMatchedDeleteCondition) {
-            whenMatchedDeleteMap.put("condition", whenMatchedDeleteCondition)
-          }
+          whenMatchedDeleteCondition.map{ whenMatchedDeleteMap.put("condition", _) }
           stage.stageDetail.put("whenMatchedDelete", whenMatchedDeleteMap)
         }        
 
         Right(stage)
       case _ =>
-        val allErrors: Errors = List(name, description, inputView, outputURI, authentication, generateSymlinkManifest, condition, whenNotMatchedInsertCondition, whenMatchedDeleteCondition, invalidKeys).collect{ case Left(errs) => errs }.flatten
+        val allErrors: Errors = List(name, description, inputView, outputURI, authentication, generateSymlinkManifest, condition, whenNotMatchedByTargetInsertCondition, whenNotMatchedBySourceDeleteCondition, whenMatchedUpdateCondition, whenMatchedDeleteCondition, invalidKeys).collect{ case Left(errs) => errs }.flatten
         val stageName = stringOrDefault(name, "unnamed stage")
         val err = StageError(index, stageName, c.origin.lineNumber, allErrors)
         Left(err :: Nil)
@@ -143,12 +157,17 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin {
   }
 }
 
-case class WhenNotMatchedInsert(
+case class WhenNotMatchedByTargetInsert(
   condition: Option[String],
   values: Option[Map[String,String]]
 )
 
+case class WhenNotMatchedBySourceDelete(
+  condition: Option[String],
+)
+
 case class WhenMatchedUpdate(
+  condition: Option[String],
   values: Option[Map[String,String]]
 )
 
@@ -163,8 +182,8 @@ case class DeltaLakeMergeLoadStage(
     inputView: String,
     outputURI: URI,
     condition: String,
-    
-    whenNotMatchedInsert: Option[WhenNotMatchedInsert],
+    whenNotMatchedByTargetInsert: Option[WhenNotMatchedByTargetInsert],
+    whenNotMatchedBySourceDelete: Option[WhenNotMatchedBySourceDelete],
     whenMatchedUpdate: Option[WhenMatchedUpdate],
     whenMatchedDelete: Option[WhenMatchedDelete],
     authentication: Option[Authentication],
@@ -194,30 +213,41 @@ object DeltaLakeMergeLoadStage {
             df.as("source"),
             stage.condition)
 
-        // if delete
+        // if match delete
         for (whenMatchedDelete <- stage.whenMatchedDelete) {
-          for (deleteCondition <- whenMatchedDelete.condition) {
-            deltaMergeOperation = deltaMergeOperation.whenMatched(deleteCondition).delete()
+          whenMatchedDelete.condition match {
+            case Some(condition) => deltaMergeOperation = deltaMergeOperation.whenMatched(condition).delete
+            case None => deltaMergeOperation = deltaMergeOperation.whenMatched.delete
           }
         }
 
         // if update
         for (whenMatchedUpdate <- stage.whenMatchedUpdate) {
-          whenMatchedUpdate.values match {
-            case Some(updateMap) => deltaMergeOperation = deltaMergeOperation.whenMatched().updateExpr(updateMap)
-            case None => deltaMergeOperation = deltaMergeOperation.whenMatched().updateAll()
+          (whenMatchedUpdate.condition, whenMatchedUpdate.values) match {
+            case (Some(condition), Some(values)) => deltaMergeOperation = deltaMergeOperation.whenMatched(condition).updateExpr(values)
+            case (Some(condition), None) => deltaMergeOperation = deltaMergeOperation.whenMatched(condition).updateAll
+            case (None, Some(values)) => deltaMergeOperation = deltaMergeOperation.whenMatched.updateExpr(values)
+            case (None, None) => deltaMergeOperation = deltaMergeOperation.whenMatched.updateAll
           }
         }
 
-        // if insert
-        for (whenNotMatchedInsert <- stage.whenNotMatchedInsert) {
-          (whenNotMatchedInsert.condition, whenNotMatchedInsert.values) match {
-            case (Some(condition), Some(values)) => deltaMergeOperation = deltaMergeOperation.whenNotMatched(condition).insertExpr(values)
-            case (Some(condition), None) => deltaMergeOperation = deltaMergeOperation.whenNotMatched(condition).insertAll() 
-            case (None, Some(values)) => deltaMergeOperation = deltaMergeOperation.whenNotMatched().insertExpr(values)
-            case (None, None) => deltaMergeOperation = deltaMergeOperation.whenNotMatched().insertAll()
+        // if insert as source rows dont exist in target dataset
+        for (whenNotMatchedByTargetInsert <- stage.whenNotMatchedByTargetInsert) {
+          (whenNotMatchedByTargetInsert.condition, whenNotMatchedByTargetInsert.values) match {
+            case (Some(condition), Some(values)) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedByTarget(condition).insertExpr(values)
+            case (Some(condition), None) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedByTarget(condition).insertAll
+            case (None, Some(values)) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedByTarget.insertExpr(values)
+            case (None, None) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedByTarget.insertAll
           }
         }
+
+        // if delete as target rows dont exist in source dataset
+        for (whenNotMatchedBySourceDelete <- stage.whenNotMatchedBySourceDelete) {
+          whenNotMatchedBySourceDelete.condition match {
+            case Some(condition) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedBySource(condition).delete
+            case None => deltaMergeOperation = deltaMergeOperation.whenNotMatchedBySource.delete
+          }
+        }        
 
         // execute
         deltaMergeOperation.execute()

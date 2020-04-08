@@ -17,7 +17,7 @@ object Dependencies {
   // spark
   val sparkSql = "org.apache.spark" %% "spark-sql" % sparkVersion % "provided"
 
-  // kafka
+  // delta
   val deltaCore = "io.delta" %% "delta-core" % "0.5.0"
 
   // Project
@@ -29,8 +29,8 @@ object Dependencies {
     arc,
     typesafeConfig,
 
-    sparkSql,
+    sparkSql
 
-    deltaCore
+    // deltaCore
   )
 }
