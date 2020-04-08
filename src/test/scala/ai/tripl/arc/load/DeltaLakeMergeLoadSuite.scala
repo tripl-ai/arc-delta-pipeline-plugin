@@ -132,6 +132,6 @@ class DeltaLakeMergeLoadSuite extends FunSuite with BeforeAndAfter {
         assert(rows.filter { case(v0,v1) => v1 != null && v1.getInt(KEY) == 6 }.length == 0, "key 6 not nserted as per whenNotMatchedByTargetInsert.condition")
       }
     }
-  }  
+  }
 
 }

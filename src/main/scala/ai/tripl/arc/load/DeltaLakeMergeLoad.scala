@@ -47,7 +47,7 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin {
     val condition = getValue[String]("condition")
 
     // read not matched by target insert
-    val whenNotMatchedByTargetInsert = c.hasPath("whenNotMatchedByTargetInsert") 
+    val whenNotMatchedByTargetInsert = c.hasPath("whenNotMatchedByTargetInsert")
     val (whenNotMatchedByTargetInsertCondition, whenNotMatchedByTargetInsertValues) = if (whenNotMatchedByTargetInsert) {
       val condition = getOptionalValue[String]("whenNotMatchedByTargetInsert.condition")
       val values = if (c.hasPath("whenNotMatchedByTargetInsert.values")) {
@@ -61,11 +61,11 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin {
     }
 
     // read not matched by source delete
-    val whenNotMatchedBySourceDelete = c.hasPath("whenNotMatchedBySourceDelete") 
-    val whenNotMatchedBySourceDeleteCondition = getOptionalValue[String]("whenNotMatchedBySourceDelete.condition") 
+    val whenNotMatchedBySourceDelete = c.hasPath("whenNotMatchedBySourceDelete")
+    val whenNotMatchedBySourceDeleteCondition = getOptionalValue[String]("whenNotMatchedBySourceDelete.condition")
 
     // read update
-    val whenMatchedUpdate = c.hasPath("whenMatchedUpdate") 
+    val whenMatchedUpdate = c.hasPath("whenMatchedUpdate")
     val whenMatchedUpdateCondition = getOptionalValue[String]("whenMatchedUpdate.condition")
     val whenMatchedUpdateValues = if (c.hasPath("whenMatchedUpdate.values")) {
       Option(readMap("whenMatchedUpdate.values", c))
@@ -74,10 +74,8 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin {
     }
 
     // read delete
-    val whenMatchedDelete = c.hasPath("whenMatchedDelete") 
+    val whenMatchedDelete = c.hasPath("whenMatchedDelete")
     val whenMatchedDeleteCondition = getOptionalValue[String]("whenMatchedDelete.condition")
-
-
 
     val params = readMap("params", c)
     val generateSymlinkManifest = getValue[java.lang.Boolean]("generateSymlinkManifest", default = Some(true))
@@ -94,7 +92,7 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin {
           outputURI=outputURI,
           authentication=authentication,
           params=params,
-          generateSymlinkManifest=generateSymlinkManifest,          
+          generateSymlinkManifest=generateSymlinkManifest,
           condition=condition,
           whenNotMatchedByTargetInsert= if (whenNotMatchedByTargetInsert) { Option(WhenNotMatchedByTargetInsert(whenNotMatchedByTargetInsertCondition, whenNotMatchedByTargetInsertValues)) } else None,
           whenNotMatchedBySourceDelete= if (whenNotMatchedBySourceDelete) { Option(WhenNotMatchedBySourceDelete(whenNotMatchedBySourceDeleteCondition)) } else None,
@@ -126,7 +124,7 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin {
           val whenNotMatchedBySourceDeleteMap = new java.util.HashMap[String, Object]()
           whenNotMatchedBySourceDeleteCondition.map{ whenNotMatchedBySourceDeleteMap.put("condition", _) }
           stage.stageDetail.put("whenNotMatchedBySourceDelete", whenNotMatchedBySourceDeleteMap)
-        }   
+        }
 
         if (whenMatchedUpdate) {
           val whenMatchedUpdateMap = new java.util.HashMap[String, Object]()
@@ -145,7 +143,7 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin {
           val whenMatchedDeleteMap = new java.util.HashMap[String, Object]()
           whenMatchedDeleteCondition.map{ whenMatchedDeleteMap.put("condition", _) }
           stage.stageDetail.put("whenMatchedDelete", whenMatchedDeleteMap)
-        }        
+        }
 
         Right(stage)
       case _ =>
@@ -247,7 +245,7 @@ object DeltaLakeMergeLoadStage {
             case Some(condition) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedBySource(condition).delete
             case None => deltaMergeOperation = deltaMergeOperation.whenNotMatchedBySource.delete
           }
-        }        
+        }
 
         // execute
         deltaMergeOperation.execute()
