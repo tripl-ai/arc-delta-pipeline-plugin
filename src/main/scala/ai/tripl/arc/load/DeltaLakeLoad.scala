@@ -140,8 +140,6 @@ object DeltaLakeLoadStage {
 
     val nonNullDF = df.drop(nulls:_*)
 
-    val listener = ListenerUtils.addStageCompletedListener(stage.stageDetail)
-
     try {
       if (nonNullDF.isStreaming) {
         stage.partitionBy match {
@@ -190,8 +188,6 @@ object DeltaLakeLoadStage {
         override val detail = stage.stageDetail
       }
     }
-
-    spark.sparkContext.removeSparkListener(listener)
 
     Option(nonNullDF)
   }
