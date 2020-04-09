@@ -18,15 +18,10 @@ import ai.tripl.arc.api.API._
 import ai.tripl.arc.config._
 import ai.tripl.arc.util._
 
-import io.delta.tables._
-
 class DeltaLakeMergeLoadSuite extends FunSuite with BeforeAndAfter {
 
   var session: SparkSession = _
   val inputView = "dataset"
-
-  val addPattern = "add.*(part-[^\"]*)".r
-  val removePattern = "remove.*(part-[^\"]*)".r
 
   before {
     implicit val spark = SparkSession
@@ -48,14 +43,6 @@ class DeltaLakeMergeLoadSuite extends FunSuite with BeforeAndAfter {
     session.stop()
   }
 
-  def getListOfFiles(dir: String):List[File] = {
-      val d = new File(dir)
-      if (d.exists && d.isDirectory) {
-          d.listFiles.filter(_.isFile).toList
-      } else {
-          List[File]()
-      }
-  }
 
   test("DeltaLakeMergeLoad: end-to-end") {
     implicit val spark = session
@@ -83,6 +70,7 @@ class DeltaLakeMergeLoadSuite extends FunSuite with BeforeAndAfter {
           "outputURI": "${output}",
           "inputView": "${inputView}",
           "condition": "source.key = target.key",
+          "whenMatchedDeleteFirst": true,
           "whenMatchedDelete": {
             "condition": "source.key = 2"
           },
