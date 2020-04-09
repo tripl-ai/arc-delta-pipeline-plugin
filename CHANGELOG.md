@@ -1,5 +1,9 @@
 # Change Log
 
+## 1.7.0
+
+- add the `DeltaLakeMergeLoad` stage. This currently relies on a custom `DeltaLake` build in `./lib` to support the `whenNotMatchedBySourceDelete` capability but a merge request has been raised against the DeltaLake offical repository.
+
 ## 1.6.0
 
 - change default `overwriteSchema` to `true` (previously `false`) to ensure column metadata changes are persisted.

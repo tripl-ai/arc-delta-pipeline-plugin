@@ -18,15 +18,10 @@ import ai.tripl.arc.api.API._
 import ai.tripl.arc.config._
 import ai.tripl.arc.util._
 
-import io.delta.tables._
-
 class DeltaLakeMergeLoadSuite extends FunSuite with BeforeAndAfter {
 
   var session: SparkSession = _
   val inputView = "dataset"
-
-  val addPattern = "add.*(part-[^\"]*)".r
-  val removePattern = "remove.*(part-[^\"]*)".r
 
   before {
     implicit val spark = SparkSession
@@ -48,14 +43,6 @@ class DeltaLakeMergeLoadSuite extends FunSuite with BeforeAndAfter {
     session.stop()
   }
 
-  def getListOfFiles(dir: String):List[File] = {
-      val d = new File(dir)
-      if (d.exists && d.isDirectory) {
-          d.listFiles.filter(_.isFile).toList
-      } else {
-          List[File]()
-      }
-  }
 
   test("DeltaLakeMergeLoad: end-to-end") {
     implicit val spark = session
@@ -83,6 +70,7 @@ class DeltaLakeMergeLoadSuite extends FunSuite with BeforeAndAfter {
           "outputURI": "${output}",
           "inputView": "${inputView}",
           "condition": "source.key = target.key",
+          "whenMatchedDeleteFirst": true,
           "whenMatchedDelete": {
             "condition": "source.key = 2"
           },
@@ -127,11 +115,11 @@ class DeltaLakeMergeLoadSuite extends FunSuite with BeforeAndAfter {
         assert(rows.filter { case(v0,v1) => v0 != null && v0.getInt(KEY) == 1 && v1 == null }.length == 1, "key 1 deleted as per whenNotMatchedBySourceDelete.condition")
         assert(rows.filter { case(v0,v1) => v0 != null && v0.getInt(KEY) == 2 && v1 == null }.length == 1, "key 2 deleted as per whenMatchedDelete.condition")
         assert(rows.filter { case(v0,v1) => v0 != null && v0.getInt(KEY) == 3 && v1 != null && v1.getString(VALUE) == "z" }.length == 1, "key 3 updated as per whenMatchedUpdate.condition")
-        assert(rows.filter { case(v0,v1) => v0 != null && v0.getInt(KEY) == 4 && v1 != null && v0.getString(VALUE) == v1.getString(VALUE) && v0.getString(FILENAME) == v1.getString(FILENAME)}.length == 1, "key 4 not updated as per whenMatchedUpdate.condition")
+        assert(rows.filter { case(v0,v1) => v0 != null && v0.getInt(KEY) == 4 && v1 != null && v0.getString(VALUE) == v1.getString(VALUE)}.length == 1, "key 4 not updated as per whenMatchedUpdate.condition")
         assert(rows.filter { case(v0,v1) => v0 == null && v1 != null && v1.getInt(KEY) == 5 && v1 != null }.length == 1, "key 5 inserted as per whenNotMatchedByTargetInsert.condition")
         assert(rows.filter { case(v0,v1) => v1 != null && v1.getInt(KEY) == 6 }.length == 0, "key 6 not nserted as per whenNotMatchedByTargetInsert.condition")
       }
     }
-  }  
+  }
 
 }
