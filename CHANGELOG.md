@@ -1,5 +1,9 @@
 # Change Log
 
+## 1.8.0
+
+- update to Arc 2.10.0
+
 ## 1.7.0
 
 - add the `DeltaLakeMergeLoad` stage. This currently relies on a custom `DeltaLake` build in `./lib` to support the `whenNotMatchedBySourceDelete` capability but a merge request has been raised against the DeltaLake offical repository.
