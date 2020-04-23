@@ -154,7 +154,7 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
           persist=false,
           numPartitions=None,
           partitionBy=Nil,
-          timeTravel=Some(extract.TimeTravel(Some(-3), None, None))
+          timeTravel=Some(extract.TimeTravel(Some(-3), None, None, None))
         )
       ).get
     }
@@ -172,7 +172,7 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
         persist=false,
         numPartitions=None,
         partitionBy=Nil,
-        timeTravel=Some(extract.TimeTravel(Some(-2), None, None))
+        timeTravel=Some(extract.TimeTravel(Some(-2), None, None, None))
       )
     ).get
 

@@ -1,4 +1,4 @@
-FROM minio/mc:RELEASE.2019-10-09T22-54-57Z
+FROM minio/mc:RELEASE.2020-04-19T19-17-53Z
 
 COPY delta.json /delta.json
 COPY entrypoint.sh /entrypoint.sh
