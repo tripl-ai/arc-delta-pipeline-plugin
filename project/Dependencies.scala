@@ -23,7 +23,7 @@ object Dependencies {
   val sparkSql = "org.apache.spark" %% "spark-sql" % sparkVersion % "provided"
 
   // delta
-  // val deltaCore = "io.delta" %% "delta-core" % "0.5.0"
+  // see lib_2.11 and lib_2.12
 
   // Project
   val etlDeps = Seq(
@@ -40,8 +40,6 @@ object Dependencies {
     sparkCore,
     sparkHive,
     sparkSql
-
-    // deltaCore
 
   )
 }

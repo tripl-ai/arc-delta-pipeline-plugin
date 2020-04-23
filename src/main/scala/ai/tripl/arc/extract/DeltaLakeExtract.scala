@@ -80,19 +80,12 @@ class DeltaLakeExtract extends PipelineStagePlugin {
 
         val optionsMap = new java.util.HashMap[String, Object]()
         for (timeTravel <- timeTravel) {
-          for (relativeVersion <- timeTravel.relativeVersion) {
-            optionsMap.put("relativeVersion", java.lang.Long.valueOf(relativeVersion))
-            stage.stageDetail.put("options", optionsMap)
-          }
-          for (timestampAsOf <- timeTravel.timestampAsOf) {
-            optionsMap.put("timestampAsOf", timestampAsOf)
-            stage.stageDetail.put("options", optionsMap)
-          }
-          for (versionAsOf <- timeTravel.versionAsOf) {
-            optionsMap.put("versionAsOf", java.lang.Long.valueOf(versionAsOf))
-            stage.stageDetail.put("options", optionsMap)
-          }
+          timeTravel.relativeVersion.foreach { relativeVersion => optionsMap.put("relativeVersion", java.lang.Long.valueOf(relativeVersion)) }
+          timeTravel.timestampAsOf.foreach { timestampAsOf => optionsMap.put("timestampAsOf", timestampAsOf) }
+          timeTravel.canReturnLastCommit.foreach { canReturnLastCommit => optionsMap.put("canReturnLastCommit", java.lang.Boolean.valueOf(canReturnLastCommit)) }
+          timeTravel.versionAsOf.foreach { versionAsOf => optionsMap.put("versionAsOf", java.lang.Long.valueOf(versionAsOf)) }
         }
+        stage.stageDetail.put("options", optionsMap)
 
         Right(stage)
       case _ =>
@@ -112,23 +105,24 @@ class DeltaLakeExtract extends PipelineStagePlugin {
     if (c.hasPath(path)) {
       try {
         val config = c.getConfig(path)
-        val expectedKeys = "relativeVersion" :: "timestampAsOf" :: "versionAsOf" :: Nil
+        val expectedKeys = "relativeVersion" :: "timestampAsOf" :: "canReturnLastCommit" :: "versionAsOf" :: Nil
         val invalidKeys = checkValidKeys(config)(expectedKeys)
         (invalidKeys) match {
           case Right(_) => {
-            (config.hasPath("relativeVersion"), config.hasPath("timestampAsOf"), config.hasPath("versionAsOf")) match {
-              case (true, false, false) => {
+            (config.hasPath("relativeVersion"), config.hasPath("timestampAsOf"), config.hasPath("versionAsOf"), config.hasPath("canReturnLastCommit")) match {
+              case (true, false, false, _) => {
                 val relativeVersion = config.getInt("relativeVersion")
                 if (relativeVersion > 0) {
                   throw new Exception(s"relativeVersion must be less than or equal to zero.")
                 } else {
-                  Right(Some(TimeTravel(Option(relativeVersion), None, None)))
+                  Right(Some(TimeTravel(Option(relativeVersion), None, None, None)))
                 }
               }
-              case (false, true, false) => Right(Some(TimeTravel(None, Option(config.getString("timestampAsOf")), None)))
-              case (false, false, true) => Right(Some(TimeTravel(None, None, Option(config.getInt("versionAsOf")))))
-              case (false, false, false) => Right(None)
-              case _ => throw new Exception(s"Only one of ['relativeVersion', 'timestampAsOf', 'versionAsOf'] is supported for time travel.")
+              case (false, true, false, true) => Right(Some(TimeTravel(None, Option(config.getString("timestampAsOf")), Option(config.getBoolean("canReturnLastCommit")), None)))
+              case (false, true, false, false) => Right(Some(TimeTravel(None, Option(config.getString("timestampAsOf")), None, None)))
+              case (false, false, true, _) => Right(Some(TimeTravel(None, None, None, Option(config.getLong("versionAsOf")))))
+              case (false, false, false, _) => Right(None)
+              case _ => throw new Exception(s"""Only one of ${expectedKeys.mkString("['", "' ,'", "']")} is supported for time travel.""")
             }
           }
           case Left(invalidKeys) => Left(invalidKeys)
@@ -145,7 +139,8 @@ class DeltaLakeExtract extends PipelineStagePlugin {
 case class TimeTravel(
   relativeVersion: Option[Int],
   timestampAsOf: Option[String],
-  versionAsOf: Option[Int]
+  canReturnLastCommit: Option[Boolean],
+  versionAsOf: Option[Long]
 )
 
 case class DeltaLakeExtractStage(
@@ -182,15 +177,14 @@ object DeltaLakeExtractStage {
         val deltaLog = DeltaLog.forTable(spark, new Path(stage.input))
         val commitInfos = deltaLog.history.getHistory(None)
         val optionsMap = new java.util.HashMap[String, String]()
+        var calculatedVersionAsOf: Option[Long] = None
 
         // determine the read options
         for (timeTravel <- stage.timeTravel) {
-          for (timestampAsOf <- timeTravel.timestampAsOf) {
-            optionsMap.put("timestampAsOf", timestampAsOf)
-          }
-          for (versionAsOf <- timeTravel.versionAsOf) {
-            optionsMap.put("versionAsOf", versionAsOf.toString)
-          }
+
+          timeTravel.timestampAsOf.foreach { optionsMap.put("timestampAsOf", _) }
+          timeTravel.canReturnLastCommit.foreach { canReturnLastCommit => optionsMap.put("canReturnLastCommit", canReturnLastCommit.toString) }
+          timeTravel.versionAsOf.foreach { versionAsOf => optionsMap.put("versionAsOf", versionAsOf.toString) }
 
           // determine whether to time travel to a specific version or a calculated version
           for (relativeVersion <- timeTravel.relativeVersion) {
@@ -198,11 +192,11 @@ object DeltaLakeExtractStage {
             val minVersion = versions.reduceLeft(_ min _)
             val maxVersion = versions.reduceLeft(_ max _)
             val maxOffset = maxVersion - minVersion
-
             if (relativeVersion < (maxOffset * -1)) {
                 throw new Exception(s"Cannot time travel Delta table to version ${relativeVersion}. Available versions: [-${maxOffset} ... 0].")
             } else {
               val calculatedVersion = maxVersion + relativeVersion
+              calculatedVersionAsOf = Option(calculatedVersion)
               optionsMap.put("versionAsOf", calculatedVersion.toString)
             }
           }
@@ -214,28 +208,33 @@ object DeltaLakeExtractStage {
         // version logging
         // this is useful for timestampAsOf as DeltaLake will extract the last timestamp EARLIER than the given timestamp
         // so the value passed in by the user is not nescessarily aligned with an actual version
-        val commitInfo = (optionsMap.asScala.get("versionAsOf"), optionsMap.asScala.get("timestampAsOf")) match {
-          case (None, None) => {
-            commitInfos.sortBy(_.version).reverse(0)
-          }
-          case (Some(versionAsOf), None) => {
-            val tt = DeltaTimeTravelSpec(None, Some(versionAsOf.toLong), None)
+        val commitInfo = stage.timeTravel match {
+          case Some(timeTravel) => {
+            val tt = (calculatedVersionAsOf, timeTravel.versionAsOf, timeTravel.timestampAsOf, timeTravel.canReturnLastCommit) match {
+              case (Some(calculatedVersionAsOf), None, _, _) => {
+                DeltaTimeTravelSpec(None, None, Some(calculatedVersionAsOf), None)
+              }              
+              case (None, Some(versionAsOf), _, _) => {
+                DeltaTimeTravelSpec(None, None, Some(versionAsOf), None)
+              }
+              case (None, None, Some(timestampAsOf), None) => {
+                DeltaTimeTravelSpec(Some(Literal(timestampAsOf)), None, None, None)
+              }
+              case (None, None, Some(timestampAsOf), Some(canReturnLastCommit)) => {
+                DeltaTimeTravelSpec(Some(Literal(timestampAsOf)), Some(canReturnLastCommit), None, None)
+              }
+              case _ => {
+                throw new Exception("invalid state please raise issue.")
+              }              
+            }
             val (version, _) = DeltaTableUtils.resolveTimeTravelVersion(spark.sessionState.conf, deltaLog, tt)
             commitInfos.filter { commit =>
               commit.getVersion == version
-            }(0)
+            }(0)            
           }
-          case (None, Some(timestampAsOf)) => {
-            val tt = DeltaTimeTravelSpec(Some(Literal(timestampAsOf)), None, None)
-            val (version, _) = DeltaTableUtils.resolveTimeTravelVersion(spark.sessionState.conf, deltaLog, tt)
-            commitInfos.filter { commit =>
-              commit.getVersion == version
-            }(0)
-          }
-          case (Some(_), Some(_)) => {
-            throw new Exception("invalid state please raise issue.")
-          }
+          case None => commitInfos.sortBy(_.version).reverse(0)
         }
+        
         val commitMap = new java.util.HashMap[String, Object]()
         commitMap.put("version", java.lang.Long.valueOf(commitInfo.getVersion))
         commitMap.put("timestamp", Instant.ofEpochMilli(commitInfo.getTimestamp).atZone(ZoneId.systemDefault).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))

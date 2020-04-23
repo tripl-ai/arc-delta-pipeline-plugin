@@ -1,5 +1,10 @@
 # Change Log
 
+## 1.9.0
+
+- update base `DeltaLake` version to `0.6.0`.
+- add `canReturnLastCommit` to `DeltaLakeExtract` `options` to allow `timestampAsOf` to return data when provided timestamp is greater than timestamp of last commit.
+
 ## 1.8.0
 
 - update to Arc 2.10.0
