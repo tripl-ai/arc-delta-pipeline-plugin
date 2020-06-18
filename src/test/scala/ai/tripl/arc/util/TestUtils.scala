@@ -43,7 +43,7 @@ object TestUtils {
         logger
     }
 
-    def getARCContext(isStreaming: Boolean, environment: String = "test", commandLineArguments: Map[String,String] = Map[String,String]()): ARCContext = {
+    def getARCContext(isStreaming: Boolean, environment: String = "test", commandLineArguments: Map[String,String] = Map[String,String](), ipynb: Boolean = true, inlineSQL: Boolean = true)(implicit spark: SparkSession): ARCContext = {
       val loader = ai.tripl.arc.util.Utils.getContextOrSparkClassLoader
 
       ARCContext(
@@ -57,11 +57,14 @@ object TestUtils {
         commandLineArguments=commandLineArguments,
         storageLevel=StorageLevel.MEMORY_AND_DISK_SER,
         immutableViews=false,
+        ipynb=ipynb,
+        inlineSQL=inlineSQL,
         dynamicConfigurationPlugins=ServiceLoader.load(classOf[DynamicConfigurationPlugin], loader).iterator().asScala.toList,
         lifecyclePlugins=ServiceLoader.load(classOf[LifecyclePlugin], loader).iterator().asScala.toList,
         activeLifecyclePlugins=Nil,
         pipelineStagePlugins=ServiceLoader.load(classOf[PipelineStagePlugin], loader).iterator().asScala.toList,
         udfPlugins=ServiceLoader.load(classOf[UDFPlugin], loader).iterator().asScala.toList,
+        serializableConfiguration=new SerializableConfiguration(spark.sparkContext.hadoopConfiguration),
         userData=collection.mutable.Map.empty
       )
     }
@@ -197,7 +200,7 @@ object TestUtils {
                 "null"
             ],
             "formatters": [
-                "uuuu-MM-dd"
+                "yyyy-MM-dd"
             ],
             "metadata": {
                 "private": true,
