@@ -1,8 +1,7 @@
 import Dependencies._
 
-lazy val scala211 = "2.11.12"
-lazy val scala212 = "2.12.10"
-lazy val supportedScalaVersions = List(scala211, scala212)
+lazy val scala212 = "2.12.11"
+lazy val supportedScalaVersions = List(scala212)
 
 lazy val root = (project in file(".")).
   enablePlugins(BuildInfoPlugin).
@@ -28,11 +27,14 @@ lazy val root = (project in file(".")).
     resolvers += "Sonatype OSS Staging" at "https://oss.sonatype.org/content/groups/staging"
   )
 
+resolvers += Resolver.mavenLocal
+publishM2Configuration := publishM2Configuration.value.withOverwrite(true)
+
 // this is used to switch the unmanaged library directory so that prebuilt delta will resolve correctly (as it uses META-INF lazy loading)
 def versionedUnmanagedBase(scalaVersion: String) = {
 	scalaVersion match {
-		case "2.11.12" => "lib_2.11"
 		case "2.12.10" => "lib_2.12"
+		case "2.12.11" => "lib_2.12"
 	}
 }
 unmanagedBase := baseDirectory.value / scalaVersion(version => versionedUnmanagedBase(version)).value

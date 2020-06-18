@@ -37,12 +37,14 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin {
     import ai.tripl.arc.config.ConfigUtils._
     implicit val c = config
 
-    val expectedKeys = "type" :: "name" :: "description" :: "environments" :: "inputView" :: "outputURI" :: "authentication" :: "params" :: "generateSymlinkManifest" :: "condition" :: "whenMatchedDeleteFirst" :: "whenNotMatchedByTargetInsert" :: "whenNotMatchedBySourceDelete" :: "whenMatchedUpdate" :: "whenMatchedDelete" :: Nil
+    val expectedKeys = "type" :: "name" :: "description" :: "environments" :: "inputView" :: "outputURI" :: "authentication" :: "params" :: "generateSymlinkManifest" :: "condition" :: "whenMatchedDeleteFirst" :: "whenNotMatchedByTargetInsert" :: "whenNotMatchedBySourceDelete" :: "whenMatchedUpdate" :: "whenMatchedDelete" :: "partitionBy" :: "numPartitions" :: Nil
     val name = getValue[String]("name")
     val description = getOptionalValue[String]("description")
     val inputView = getValue[String]("inputView")
     val outputURI = getValue[String]("outputURI") |> parseURI("outputURI") _
     val authentication = readAuthentication("authentication")
+    val partitionBy = getValue[StringList]("partitionBy", default = Some(Nil))
+    val numPartitions = getOptionalValue[Int]("numPartitions")
 
     // merge condition
     val condition = getValue[String]("condition")
@@ -83,8 +85,8 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin {
     val generateSymlinkManifest = getValue[java.lang.Boolean]("generateSymlinkManifest", default = Some(true))
     val invalidKeys = checkValidKeys(c)(expectedKeys)
 
-    (name, description, inputView, outputURI, authentication, generateSymlinkManifest, condition, whenMatchedDeleteFirst, whenNotMatchedByTargetInsertCondition, whenNotMatchedBySourceDeleteCondition, whenMatchedUpdateCondition, whenMatchedDeleteCondition, invalidKeys) match {
-      case (Right(name), Right(description), Right(inputView), Right(outputURI), Right(authentication), Right(generateSymlinkManifest), Right(condition), Right(whenMatchedDeleteFirst), Right(whenNotMatchedByTargetInsertCondition), Right(whenNotMatchedBySourceDeleteCondition), Right(whenMatchedUpdateCondition), Right(whenMatchedDeleteCondition), Right(invalidKeys)) =>
+    (name, description, inputView, outputURI, authentication, generateSymlinkManifest, condition, whenMatchedDeleteFirst, whenNotMatchedByTargetInsertCondition, whenNotMatchedBySourceDeleteCondition, whenMatchedUpdateCondition, whenMatchedDeleteCondition, partitionBy, numPartitions, invalidKeys) match {
+      case (Right(name), Right(description), Right(inputView), Right(outputURI), Right(authentication), Right(generateSymlinkManifest), Right(condition), Right(whenMatchedDeleteFirst), Right(whenNotMatchedByTargetInsertCondition), Right(whenNotMatchedBySourceDeleteCondition), Right(whenMatchedUpdateCondition), Right(whenMatchedDeleteCondition), Right(partitionBy), Right(numPartitions), Right(invalidKeys)) =>
 
         val stage = DeltaLakeMergeLoadStage(
           plugin=this,
@@ -100,7 +102,9 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin {
           whenNotMatchedBySourceDelete= if (whenNotMatchedBySourceDelete) { Option(WhenNotMatchedBySourceDelete(whenNotMatchedBySourceDeleteCondition)) } else None,
           whenMatchedUpdate= if (whenMatchedUpdate) { Option(WhenMatchedUpdate(whenMatchedUpdateCondition, whenMatchedUpdateValues)) } else None,
           whenMatchedDelete= if (whenMatchedDelete) { Option(WhenMatchedDelete(whenMatchedDeleteCondition)) } else None,
-          whenMatchedDeleteFirst=whenMatchedDeleteFirst
+          whenMatchedDeleteFirst=whenMatchedDeleteFirst,
+          partitionBy=partitionBy,
+          numPartitions=numPartitions
         )
 
         // logging
@@ -109,6 +113,8 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin {
         stage.stageDetail.put("generateSymlinkManifest", generateSymlinkManifest)
         stage.stageDetail.put("condition", condition)
         stage.stageDetail.put("whenMatchedDeleteFirst", whenMatchedDeleteFirst)
+        numPartitions.foreach { numPartitions => stage.stageDetail.put("numPartitions", Integer.valueOf(numPartitions)) }
+        stage.stageDetail.put("partitionBy", partitionBy.asJava)
 
         if (whenNotMatchedByTargetInsert) {
           val whenNotMatchedByTargetInsertMap = new java.util.HashMap[String, Object]()
@@ -150,7 +156,7 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin {
 
         Right(stage)
       case _ =>
-        val allErrors: Errors = List(name, description, inputView, outputURI, authentication, generateSymlinkManifest, condition, whenMatchedDeleteFirst, whenNotMatchedByTargetInsertCondition, whenNotMatchedBySourceDeleteCondition, whenMatchedUpdateCondition, whenMatchedDeleteCondition, invalidKeys).collect{ case Left(errs) => errs }.flatten
+        val allErrors: Errors = List(name, description, inputView, outputURI, authentication, generateSymlinkManifest, condition, whenMatchedDeleteFirst, whenNotMatchedByTargetInsertCondition, whenNotMatchedBySourceDeleteCondition, whenMatchedUpdateCondition, whenMatchedDeleteCondition, partitionBy, numPartitions, invalidKeys).collect{ case Left(errs) => errs }.flatten
         val stageName = stringOrDefault(name, "unnamed stage")
         val err = StageError(index, stageName, c.origin.lineNumber, allErrors)
         Left(err :: Nil)
@@ -189,6 +195,8 @@ case class DeltaLakeMergeLoadStage(
     whenMatchedUpdate: Option[WhenMatchedUpdate],
     whenMatchedDelete: Option[WhenMatchedDelete],
     authentication: Option[Authentication],
+    partitionBy: List[String],
+    numPartitions: Option[Int],    
     params: Map[String, String],
     generateSymlinkManifest: Boolean
   ) extends PipelineStage {
@@ -233,10 +241,27 @@ object DeltaLakeMergeLoadStage {
 
     try {
 
+        val inputDF = stage.partitionBy match {
+          case Nil => {
+            stage.numPartitions match {
+              case Some(n) => df.repartition(n)
+              case None => df
+            }
+          }
+          case partitionBy => {
+            // create a column array for repartitioning
+            val partitionCols = partitionBy.map(col => df(col))
+            stage.numPartitions match {
+              case Some(n) => df.repartition(n, partitionCols:_*)
+              case None => df.repartition(partitionCols:_*)
+            }
+          }
+        }      
+
         // build the operation
         var deltaMergeOperation: DeltaMergeBuilder = DeltaTable.forPath(stage.outputURI.toString).as("target")
           .merge(
-            df.as("source"),
+            inputDF.as("source"),
             stage.condition)
 
         // match

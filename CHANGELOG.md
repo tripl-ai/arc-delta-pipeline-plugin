@@ -1,5 +1,11 @@
 # Change Log
 
+## 2.0.0
+
+- update base `DeltaLake` version to `0.7.0`.
+- update to Arc 3.0.0.
+- add `partitionBy` and `numPartitions` to `DeltaLakeMergeLoad`.
+
 ## 1.9.0
 
 - update base `DeltaLake` version to `0.6.0`.
