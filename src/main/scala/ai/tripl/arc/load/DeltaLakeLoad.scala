@@ -73,6 +73,7 @@ class DeltaLakeLoad extends PipelineStagePlugin {
           params=params
         )
 
+        numPartitions.foreach { numPartitions => stage.stageDetail.put("numPartitions", Integer.valueOf(numPartitions)) }
         stage.stageDetail.put("inputView", inputView)
         stage.stageDetail.put("outputURI", outputURI.toString)
         stage.stageDetail.put("partitionBy", partitionBy.asJava)

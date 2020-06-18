@@ -69,6 +69,8 @@ class DeltaLakeMergeLoadSuite extends FunSuite with BeforeAndAfter {
           ],
           "outputURI": "${output}",
           "inputView": "${inputView}",
+          "partitionBy": ["key"],
+          "numPartitions": 5,
           "condition": "source.key = target.key",
           "whenMatchedDeleteFirst": true,
           "whenMatchedDelete": {
@@ -105,19 +107,19 @@ class DeltaLakeMergeLoadSuite extends FunSuite with BeforeAndAfter {
         val df0 = spark.read.format("delta").option("versionAsOf", 0).load(output).withColumn("_filename", input_file_name()).orderBy(col("key"))
         val df1 = spark.read.format("delta").option("versionAsOf", 1).load(output).withColumn("_filename", input_file_name()).orderBy(col("key"))
         val join = df0.joinWith(df1, df0("key") === df1("key"), "full")
+        val rows = join.collect
 
         val KEY = 0
         val VALUE = 1
         val FILENAME = 2
-        val rows = join.collect
 
-        assert(rows.filter { case(v0,v1) => v0 != null && v0.getInt(KEY) == 0 && v1 != null && v1.getInt(KEY) == 0 }.length == 1, "key 0 not deleted as per whenNotMatchedBySourceDelete.condition")
-        assert(rows.filter { case(v0,v1) => v0 != null && v0.getInt(KEY) == 1 && v1 == null }.length == 1, "key 1 deleted as per whenNotMatchedBySourceDelete.condition")
-        assert(rows.filter { case(v0,v1) => v0 != null && v0.getInt(KEY) == 2 && v1 == null }.length == 1, "key 2 deleted as per whenMatchedDelete.condition")
-        assert(rows.filter { case(v0,v1) => v0 != null && v0.getInt(KEY) == 3 && v1 != null && v1.getString(VALUE) == "z" }.length == 1, "key 3 updated as per whenMatchedUpdate.condition")
-        assert(rows.filter { case(v0,v1) => v0 != null && v0.getInt(KEY) == 4 && v1 != null && v0.getString(VALUE) == v1.getString(VALUE)}.length == 1, "key 4 not updated as per whenMatchedUpdate.condition")
-        assert(rows.filter { case(v0,v1) => v0 == null && v1 != null && v1.getInt(KEY) == 5 && v1 != null }.length == 1, "key 5 inserted as per whenNotMatchedByTargetInsert.condition")
-        assert(rows.filter { case(v0,v1) => v1 != null && v1.getInt(KEY) == 6 }.length == 0, "key 6 not nserted as per whenNotMatchedByTargetInsert.condition")
+        assert(rows.filter { case(v0, v1) => !v0.isNullAt(KEY) && v0.getInt(KEY) == 0 && !v1.isNullAt(KEY) && v1.getInt(KEY) == 0 }.length == 1, "key 0 not deleted as per whenNotMatchedBySourceDelete.condition")
+        assert(rows.filter { case(v0, v1) => !v0.isNullAt(KEY) && v0.getInt(KEY) == 1 && v1.isNullAt(KEY) }.length == 1, "key 1 deleted as per whenNotMatchedBySourceDelete.condition")
+        assert(rows.filter { case(v0, v1) => !v0.isNullAt(KEY) && v0.getInt(KEY) == 2 && v1.isNullAt(KEY) }.length == 1, "key 2 deleted as per whenMatchedDelete.condition")
+        assert(rows.filter { case(v0, v1) => !v0.isNullAt(KEY) && v0.getInt(KEY) == 3 && !v1.isNullAt(KEY) && v1.getString(VALUE) == "z" }.length == 1, "key 3 updated as per whenMatchedUpdate.condition")
+        assert(rows.filter { case(v0, v1) => !v0.isNullAt(KEY) && v0.getInt(KEY) == 4 && !v1.isNullAt(KEY) && v0.getString(VALUE) == v1.getString(VALUE)}.length == 1, "key 4 not updated as per whenMatchedUpdate.condition")
+        assert(rows.filter { case(v0, v1) => v0.isNullAt(KEY) && !v1.isNullAt(KEY) && v1.getInt(KEY) == 5 }.length == 1, "key 5 inserted as per whenNotMatchedByTargetInsert.condition")
+        assert(rows.filter { case(v0, v1) => !v1.isNullAt(KEY) && v1.getInt(KEY) == 6 }.length == 0, "key 6 not inserted as per whenNotMatchedByTargetInsert.condition")
       }
     }
   }
