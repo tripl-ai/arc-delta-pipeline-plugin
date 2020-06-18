@@ -33,6 +33,7 @@ publishM2Configuration := publishM2Configuration.value.withOverwrite(true)
 // this is used to switch the unmanaged library directory so that prebuilt delta will resolve correctly (as it uses META-INF lazy loading)
 def versionedUnmanagedBase(scalaVersion: String) = {
 	scalaVersion match {
+		case "2.12.10" => "lib_2.12"
 		case "2.12.11" => "lib_2.12"
 	}
 }
