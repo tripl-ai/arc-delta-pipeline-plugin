@@ -28,9 +28,27 @@ import io.delta.tables.DeltaMergeBuilder
 import org.apache.spark.sql.delta._
 import org.apache.hadoop.fs.Path
 
-class DeltaLakeMergeLoad extends PipelineStagePlugin {
+class DeltaLakeMergeLoad extends PipelineStagePlugin with JupyterCompleter {
 
   val version = ai.tripl.arc.deltalake.BuildInfo.version
+
+  val snippet = """{
+    |  "type": "DeltaLakeMergeLoad",
+    |  "name": "DeltaLakeMergeLoad",
+    |  "environments": [
+    |    "production",
+    |    "test"
+    |  ],
+    |  "inputView": "inputView",
+    |  "outputURI": "hdfs://*.delta",
+    |  "condition": "source.primaryKey = target.primaryKey",
+    |  "whenMatchedDelete": {},
+    |  "whenMatchedUpdate": {},
+    |  "whenNotMatchedByTargetInsert": {},
+    |  "whenNotMatchedBySourceDelete": {}
+    |}""".stripMargin
+
+  val documentationURI = new java.net.URI(s"${baseURI}/load/#deltalakemergeload")
 
   def instantiate(index: Int, config: com.typesafe.config.Config)(implicit spark: SparkSession, logger: ai.tripl.arc.util.log.logger.Logger, arcContext: ARCContext): Either[List[ai.tripl.arc.config.Error.StageError], PipelineStage] = {
     import ai.tripl.arc.config.ConfigReader._
@@ -196,10 +214,10 @@ case class DeltaLakeMergeLoadStage(
     whenMatchedDelete: Option[WhenMatchedDelete],
     authentication: Option[Authentication],
     partitionBy: List[String],
-    numPartitions: Option[Int],    
+    numPartitions: Option[Int],
     params: Map[String, String],
     generateSymlinkManifest: Boolean
-  ) extends PipelineStage {
+  ) extends LoadPipelineStage {
 
   override def execute()(implicit spark: SparkSession, logger: ai.tripl.arc.util.log.logger.Logger, arcContext: ARCContext): Option[DataFrame] = {
     DeltaLakeMergeLoadStage.execute(this)
@@ -231,8 +249,8 @@ object DeltaLakeMergeLoadStage {
             case (None, None) => deltaMergeOperation.whenMatched.updateAll
           }
         case None => deltaMergeOperation
-      }  
-    }  
+      }
+    }
 
     val df = spark.table(stage.inputView)
 
@@ -256,7 +274,7 @@ object DeltaLakeMergeLoadStage {
               case None => df.repartition(partitionCols:_*)
             }
           }
-        }      
+        }
 
         // build the operation
         var deltaMergeOperation: DeltaMergeBuilder = DeltaTable.forPath(stage.outputURI.toString).as("target")

@@ -27,9 +27,22 @@ import io.delta.tables.DeltaTable
 import org.apache.spark.sql.delta._
 import org.apache.hadoop.fs.Path
 
-class DeltaLakeLoad extends PipelineStagePlugin {
+class DeltaLakeLoad extends PipelineStagePlugin with JupyterCompleter {
 
   val version = ai.tripl.arc.deltalake.BuildInfo.version
+
+  val snippet = """{
+    |  "type": "DeltaLakeLoad",
+    |  "name": "DeltaLakeLoad",
+    |  "environments": [
+    |    "production",
+    |    "test"
+    |  ],
+    |  "inputView": "inputView",
+    |  "outputURI": "hdfs://*.delta"
+    |}""".stripMargin
+
+  val documentationURI = new java.net.URI(s"${baseURI}/load/#deltalakeload")
 
   def instantiate(index: Int, config: com.typesafe.config.Config)(implicit spark: SparkSession, logger: ai.tripl.arc.util.log.logger.Logger, arcContext: ARCContext): Either[List[ai.tripl.arc.config.Error.StageError], PipelineStage] = {
     import ai.tripl.arc.config.ConfigReader._
@@ -106,7 +119,7 @@ case class DeltaLakeLoadStage(
     params: Map[String, String],
     options: Map[String, String],
     generateSymlinkManifest: Boolean
-  ) extends PipelineStage {
+  ) extends LoadPipelineStage {
 
   override def execute()(implicit spark: SparkSession, logger: ai.tripl.arc.util.log.logger.Logger, arcContext: ARCContext): Option[DataFrame] = {
     DeltaLakeLoadStage.execute(this)
