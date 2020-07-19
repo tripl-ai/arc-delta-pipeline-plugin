@@ -34,9 +34,22 @@ import org.apache.spark.sql.delta._
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.catalyst.expressions.Literal
 
-class DeltaLakeExtract extends PipelineStagePlugin {
+class DeltaLakeExtract extends PipelineStagePlugin with JupyterCompleter {
 
   val version = ai.tripl.arc.deltalake.BuildInfo.version
+
+  val snippet = """{
+    |  "type": "DeltaLakeExtract",
+    |  "name": "DeltaLakeExtract",
+    |  "environments": [
+    |    "production",
+    |    "test"
+    |  ],
+    |  "inputURI": "hdfs://*.delta",
+    |  "outputView": "outputView"
+    |}""".stripMargin
+
+  val documentationURI = new java.net.URI(s"${baseURI}/extract/#deltalakeextract")
 
   def instantiate(index: Int, config: com.typesafe.config.Config)(implicit spark: SparkSession, logger: ai.tripl.arc.util.log.logger.Logger, arcContext: ARCContext): Either[List[ai.tripl.arc.config.Error.StageError], PipelineStage] = {
     import ai.tripl.arc.config.ConfigReader._
@@ -155,7 +168,7 @@ case class DeltaLakeExtractStage(
     numPartitions: Option[Int],
     partitionBy: List[String],
     timeTravel: Option[TimeTravel]
-  ) extends PipelineStage {
+  ) extends ExtractPipelineStage {
 
   override def execute()(implicit spark: SparkSession, logger: ai.tripl.arc.util.log.logger.Logger, arcContext: ARCContext): Option[DataFrame] = {
     DeltaLakeExtractStage.execute(this)
@@ -213,7 +226,7 @@ object DeltaLakeExtractStage {
             val tt = (calculatedVersionAsOf, timeTravel.versionAsOf, timeTravel.timestampAsOf, timeTravel.canReturnLastCommit) match {
               case (Some(calculatedVersionAsOf), None, _, _) => {
                 DeltaTimeTravelSpec(None, None, Some(calculatedVersionAsOf), None)
-              }              
+              }
               case (None, Some(versionAsOf), _, _) => {
                 DeltaTimeTravelSpec(None, None, Some(versionAsOf), None)
               }
@@ -225,16 +238,16 @@ object DeltaLakeExtractStage {
               }
               case _ => {
                 throw new Exception("invalid state please raise issue.")
-              }              
+              }
             }
             val (version, _) = DeltaTableUtils.resolveTimeTravelVersion(spark.sessionState.conf, deltaLog, tt)
             commitInfos.filter { commit =>
               commit.getVersion == version
-            }(0)            
+            }(0)
           }
           case None => commitInfos.sortBy(_.version).reverse(0)
         }
-        
+
         val commitMap = new java.util.HashMap[String, Object]()
         commitMap.put("version", java.lang.Long.valueOf(commitInfo.getVersion))
         commitMap.put("timestamp", Instant.ofEpochMilli(commitInfo.getTimestamp).atZone(ZoneId.systemDefault).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))

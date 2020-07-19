@@ -1,5 +1,9 @@
 # Change Log
 
+## 2.1.0
+
+- add snippets and documentation links to implement `JupyterCompleter`.
+
 ## 2.0.0
 
 - update base `DeltaLake` version to `0.7.0`.
