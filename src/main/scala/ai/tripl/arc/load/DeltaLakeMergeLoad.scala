@@ -135,6 +135,7 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin with JupyterCompleter {
         stage.stageDetail.put("generateSymlinkManifest", generateSymlinkManifest)
         stage.stageDetail.put("condition", condition)
         stage.stageDetail.put("whenMatchedDeleteFirst", whenMatchedDeleteFirst)
+        stage.stageDetail.put("createTableIfNotExists", createTableIfNotExists)
         numPartitions.foreach { numPartitions => stage.stageDetail.put("numPartitions", Integer.valueOf(numPartitions)) }
         stage.stageDetail.put("partitionBy", partitionBy.asJava)
 
