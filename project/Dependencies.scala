@@ -13,7 +13,7 @@ object Dependencies {
   val novocode = "com.novocode" % "junit-interface" % "0.11" % "test"
 
   // arc
-  val arc = "ai.tripl" %% "arc" % "3.1.0" % "provided"
+  val arc = "ai.tripl" %% "arc" % "3.2.0" % "provided"
   val typesafeConfig = "com.typesafe" % "config" % "1.3.1" intransitive()
 
   // spark

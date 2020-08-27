@@ -1,9 +1,11 @@
 package ai.tripl.arc.load
 
 import java.net.URI
-import scala.collection.JavaConverters._
 import java.time.format.DateTimeFormatter
 import java.time.{Instant, ZoneId}
+
+import scala.collection.JavaConverters._
+import scala.util.Try
 
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
@@ -194,6 +196,7 @@ object DeltaLakeLoadStage {
         val commitMap = new java.util.HashMap[String, Object]()
         commitMap.put("version", java.lang.Long.valueOf(commitInfo.getVersion))
         commitMap.put("timestamp", Instant.ofEpochMilli(commitInfo.getTimestamp).atZone(ZoneId.systemDefault).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+        commitInfo.operationMetrics.foreach { operationMetrics => commitMap.put("operationMetrics", operationMetrics.map { case (k, v) => (k, Try(v.toInt).getOrElse(v)) }.asJava) }
         stage.stageDetail.put("commit", commitMap)
 
       }

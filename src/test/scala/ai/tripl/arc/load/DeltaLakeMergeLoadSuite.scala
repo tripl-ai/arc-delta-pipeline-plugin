@@ -124,4 +124,93 @@ class DeltaLakeMergeLoadSuite extends FunSuite with BeforeAndAfter {
     }
   }
 
+  test("DeltaLakeMergeLoad: createTableIfNotExists = false") {
+    implicit val spark = session
+    import spark.implicits._
+    implicit val logger = TestUtils.getLogger()
+    implicit val arcContext = TestUtils.getARCContext(isStreaming=false)
+
+    val testUUID = UUID.randomUUID.toString
+    val output = s"${FileUtils.getTempDirectoryPath}/${testUUID}"
+
+    // create a dataset that does not exist on disk
+    Seq((2, "c"),(3, "z"),(4, "y"),(5, "f"),(6, "g")).toDF("key", "value").createOrReplaceTempView(inputView)
+
+    val conf = s"""{
+      "stages": [
+        {
+          "type": "DeltaLakeMergeLoad",
+          "name": "test",
+          "description": "test",
+          "environments": [
+            "production",
+            "test"
+          ],
+          "outputURI": "${output}",
+          "inputView": "${inputView}",
+          "createTableIfNotExists": false,
+          "partitionBy": ["key"],
+          "numPartitions": 5,
+          "condition": "source.key = target.key"
+        }
+      ]
+    }"""
+
+    val pipelineEither = ArcPipeline.parseConfig(Left(conf), arcContext)
+
+    pipelineEither match {
+      case Left(err) => fail(err.toString)
+      case Right((pipeline, _)) => {
+        val thrown0 = intercept[Exception with DetailException] {
+          val df = ARC.run(pipeline)(spark, logger, arcContext).get
+          df.take(1)
+        }
+        assert(thrown0.getMessage.contains("is not a Delta table and 'createTableIfNotExists' is false so cannot complete this operation"))
+      }
+    }
+  }
+
+  test("DeltaLakeMergeLoad: createTableIfNotExists = true") {
+    implicit val spark = session
+    import spark.implicits._
+    implicit val logger = TestUtils.getLogger()
+    implicit val arcContext = TestUtils.getARCContext(isStreaming=false)
+
+    val testUUID = UUID.randomUUID.toString
+    val output = s"${FileUtils.getTempDirectoryPath}/${testUUID}"
+
+    // create a dataset that does not exist on disk
+    Seq((2, "c"),(3, "z"),(4, "y"),(5, "f"),(6, "g")).toDF("key", "value").createOrReplaceTempView(inputView)
+
+    val conf = s"""{
+      "stages": [
+        {
+          "type": "DeltaLakeMergeLoad",
+          "name": "test",
+          "description": "test",
+          "environments": [
+            "production",
+            "test"
+          ],
+          "outputURI": "${output}",
+          "inputView": "${inputView}",
+          "createTableIfNotExists": true,
+          "partitionBy": ["key"],
+          "numPartitions": 5,
+          "condition": "source.key = target.key"
+        }
+      ]
+    }"""
+
+    val pipelineEither = ArcPipeline.parseConfig(Left(conf), arcContext)
+
+    pipelineEither match {
+      case Left(err) => fail(err.toString)
+      case Right((pipeline, _)) => {
+        val df = ARC.run(pipeline)(spark, logger, arcContext).get
+        df.take(1)
+      }
+    }
+  }
+
 }
