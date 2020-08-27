@@ -319,19 +319,29 @@ object DeltaLakeMergeLoadStage {
         } catch {
           case e: Exception if (e.getMessage.contains("is not a Delta table")) => {
             if (stage.createTableIfNotExists) {
+
+              val dropMap = new java.util.HashMap[String, Object]()
+              // Parquet cannot handle a column of NullType
+              val nulls = df.schema.filter( _.dataType == NullType).map(_.name)
+              if (!nulls.isEmpty) {
+                dropMap.put("NullType", nulls.asJava)
+              }
+              stage.stageDetail.put("drop", dropMap)
+              val nonNullDF = df.drop(nulls:_*)
+
               stage.partitionBy match {
                 case Nil => {
                   stage.numPartitions match {
-                    case Some(n) => inputDF.repartition(n).write.format("delta").save(stage.outputURI.toString)
-                    case None => inputDF.write.format("delta").save(stage.outputURI.toString)
+                    case Some(n) => nonNullDF.repartition(n).write.format("delta").save(stage.outputURI.toString)
+                    case None => nonNullDF.write.format("delta").save(stage.outputURI.toString)
                   }
                 }
                 case partitionBy => {
                   // create a column array for repartitioning
-                  val partitionCols = partitionBy.map(col => inputDF(col))
+                  val partitionCols = partitionBy.map(col => nonNullDF(col))
                   stage.numPartitions match {
-                    case Some(n) => inputDF.repartition(n, partitionCols:_*).write.format("delta").partitionBy(partitionBy:_*).save(stage.outputURI.toString)
-                    case None => inputDF.repartition(partitionCols:_*).write.format("delta").partitionBy(partitionBy:_*).save(stage.outputURI.toString)
+                    case Some(n) => nonNullDF.repartition(n, partitionCols:_*).write.format("delta").partitionBy(partitionBy:_*).save(stage.outputURI.toString)
+                    case None => nonNullDF.repartition(partitionCols:_*).write.format("delta").partitionBy(partitionBy:_*).save(stage.outputURI.toString)
                   }
                 }
               }
