@@ -263,20 +263,35 @@ object DeltaLakeMergeLoadStage {
     // set write permissions
     CloudUtils.setHadoopConfiguration(stage.authentication)
 
+    // DeltaLakeMergeLoad cannot handle a column of NullType
+    val nulls = df.schema.filter( _.dataType == NullType).map(_.name)
+    val nonNullDF = if (!nulls.isEmpty) {
+      val dropMap = new java.util.HashMap[String, Object]()
+      dropMap.put("NullType", nulls.asJava)
+      if (arcContext.dropUnsupported) {
+        stage.stageDetail.put("drop", dropMap)
+        df.drop(nulls:_*)
+      } else {
+        throw new Exception(s"""inputView '${stage.inputView}' contains types ${new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(dropMap)} which are unsupported by DeltaLakeMergeLoad and 'dropUnsupported' is set to false.""")
+      }
+    } else {
+      df
+    }
+
     try {
-        val inputDF = stage.partitionBy match {
+        val sourceDF = stage.partitionBy match {
           case Nil => {
             stage.numPartitions match {
-              case Some(n) => df.repartition(n)
-              case None => df
+              case Some(n) => nonNullDF.repartition(n)
+              case None => nonNullDF
             }
           }
           case partitionBy => {
             // create a column array for repartitioning
-            val partitionCols = partitionBy.map(col => df(col))
+            val partitionCols = partitionBy.map(col => nonNullDF(col))
             stage.numPartitions match {
-              case Some(n) => df.repartition(n, partitionCols:_*)
-              case None => df.repartition(partitionCols:_*)
+              case Some(n) => nonNullDF.repartition(n, partitionCols:_*)
+              case None => nonNullDF.repartition(partitionCols:_*)
             }
           }
         }
@@ -285,7 +300,7 @@ object DeltaLakeMergeLoadStage {
         try {
           var deltaMergeOperation: DeltaMergeBuilder = DeltaTable.forPath(stage.outputURI.toString).as("target")
             .merge(
-              inputDF.as("source"),
+              sourceDF.as("source"),
               stage.condition)
 
           // match
@@ -320,16 +335,6 @@ object DeltaLakeMergeLoadStage {
         } catch {
           case e: Exception if (e.getMessage.contains("is not a Delta table")) => {
             if (stage.createTableIfNotExists) {
-
-              val dropMap = new java.util.HashMap[String, Object]()
-              // Parquet cannot handle a column of NullType
-              val nulls = df.schema.filter( _.dataType == NullType).map(_.name)
-              if (!nulls.isEmpty) {
-                dropMap.put("NullType", nulls.asJava)
-              }
-              stage.stageDetail.put("drop", dropMap)
-              val nonNullDF = df.drop(nulls:_*)
-
               stage.partitionBy match {
                 case Nil => {
                   stage.numPartitions match {
