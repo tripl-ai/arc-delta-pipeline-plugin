@@ -24,7 +24,7 @@ import ai.tripl.arc.util.ControlUtils._
 
 class DeltaLakeLoadSuite extends FunSuite with BeforeAndAfter {
 
-  var session: SparkSession = _  
+  var session: SparkSession = _
   val inputView = "inputView"
 
   val bucketName = "test"
@@ -52,7 +52,7 @@ class DeltaLakeLoadSuite extends FunSuite with BeforeAndAfter {
     implicit val logger = TestUtils.getLogger()
 
     // set for deterministic timezone
-    spark.conf.set("spark.sql.session.timeZone", "UTC")       
+    spark.conf.set("spark.sql.session.timeZone", "UTC")
 
     session = spark
   }
@@ -64,7 +64,7 @@ class DeltaLakeLoadSuite extends FunSuite with BeforeAndAfter {
     implicit val spark = session
     import spark.implicits._
     implicit val logger = TestUtils.getLogger()
-    implicit val arcContext = TestUtils.getARCContext(isStreaming=false)
+    implicit val arcContext = TestUtils.getARCContext(isStreaming=false,dropUnsupported=true)
 
     val dataset = TestUtils.getKnownDataset
     dataset.createOrReplaceTempView(inputView)
@@ -85,7 +85,7 @@ class DeltaLakeLoadSuite extends FunSuite with BeforeAndAfter {
             "accessKeyID": "${minioAccessKey}",
             "secretAccessKey": "${minioSecretKey}",
             "endpoint": "${minioHostPort}"
-          }          
+          }
         }
       ]
     }"""
@@ -99,13 +99,13 @@ class DeltaLakeLoadSuite extends FunSuite with BeforeAndAfter {
       }
     }
 
-  }    
+  }
 
   test("DeltaLakeLoadSuite: test s3 writeonly policy") {
     implicit val spark = session
     import spark.implicits._
     implicit val logger = TestUtils.getLogger()
-    implicit val arcContext = TestUtils.getARCContext(isStreaming=false)
+    implicit val arcContext = TestUtils.getARCContext(isStreaming=false,dropUnsupported=true)
 
     val dataset = TestUtils.getKnownDataset
     dataset.createOrReplaceTempView(inputView)
@@ -126,7 +126,7 @@ class DeltaLakeLoadSuite extends FunSuite with BeforeAndAfter {
             "accessKeyID": "${deltaUser}",
             "secretAccessKey": "${deltaSecret}",
             "endpoint": "${minioHostPort}"
-          }          
+          }
         }
       ]
     }"""
@@ -140,6 +140,6 @@ class DeltaLakeLoadSuite extends FunSuite with BeforeAndAfter {
       }
     }
 
-  }      
+  }
 
 }
