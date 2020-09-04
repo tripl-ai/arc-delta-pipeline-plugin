@@ -145,6 +145,7 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
       val dataset = extract.DeltaLakeExtractStage.execute(
         extract.DeltaLakeExtractStage(
           plugin=new extract.DeltaLakeExtract,
+          id=None,
           name=outputView,
           description=None,
           input=output,
@@ -163,6 +164,7 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
     val dataset = extract.DeltaLakeExtractStage.execute(
       extract.DeltaLakeExtractStage(
         plugin=new extract.DeltaLakeExtract,
+        id=None,
         name=outputView,
         description=None,
         input=output,
