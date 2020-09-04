@@ -40,6 +40,5 @@ object Dependencies {
     sparkCore,
     sparkHive,
     sparkSql
-
   )
 }
