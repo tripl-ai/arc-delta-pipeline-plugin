@@ -1,6 +1,6 @@
 import Dependencies._
 
-lazy val scala212 = "2.12.11"
+lazy val scala212 = "2.12.12"
 lazy val supportedScalaVersions = List(scala212)
 
 lazy val root = (project in file(".")).
@@ -35,11 +35,12 @@ def versionedUnmanagedBase(scalaVersion: String) = {
 	scalaVersion match {
 		case "2.12.10" => "lib_2.12"
 		case "2.12.11" => "lib_2.12"
+		case "2.12.12" => "lib_2.12"
 	}
 }
 unmanagedBase := baseDirectory.value / scalaVersion(version => versionedUnmanagedBase(version)).value
 
-fork in run := true  
+fork in run := true
 
 scalacOptions := Seq("-target:jvm-1.8", "-unchecked", "-deprecation")
 

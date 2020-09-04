@@ -1,9 +1,11 @@
 package ai.tripl.arc.load
 
 import java.net.URI
-import scala.collection.JavaConverters._
 import java.time.format.DateTimeFormatter
 import java.time.{Instant, ZoneId}
+
+import scala.collection.JavaConverters._
+import scala.util.Try
 
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
@@ -49,7 +51,8 @@ class DeltaLakeLoad extends PipelineStagePlugin with JupyterCompleter {
     import ai.tripl.arc.config.ConfigUtils._
     implicit val c = config
 
-    val expectedKeys = "type" :: "name" :: "description" :: "environments" :: "inputView" :: "outputURI" :: "authentication" :: "numPartitions" :: "partitionBy" :: "saveMode" :: "replaceWhere" :: "mergeSchema" :: "overwriteSchema" :: "outputMode" :: "checkpointLocation" :: "params" :: "options" :: "generateSymlinkManifest" :: Nil
+    val expectedKeys = "type" :: "id" :: "name" :: "description" :: "environments" :: "inputView" :: "outputURI" :: "authentication" :: "numPartitions" :: "partitionBy" :: "saveMode" :: "replaceWhere" :: "mergeSchema" :: "overwriteSchema" :: "outputMode" :: "checkpointLocation" :: "params" :: "options" :: "generateSymlinkManifest" :: Nil
+    val id = getOptionalValue[String]("id")
     val name = getValue[String]("name")
     val description = getOptionalValue[String]("description")
     val inputView = getValue[String]("inputView")
@@ -67,11 +70,12 @@ class DeltaLakeLoad extends PipelineStagePlugin with JupyterCompleter {
     val generateSymlinkManifest = getValue[java.lang.Boolean]("generateSymlinkManifest", default = Some(true))
     val invalidKeys = checkValidKeys(c)(expectedKeys)
 
-    (name, description, inputView, outputURI, numPartitions, authentication, saveMode, partitionBy, outputMode, generateSymlinkManifest, invalidKeys) match {
-      case (Right(name), Right(description), Right(inputView), Right(outputURI), Right(numPartitions), Right(authentication), Right(saveMode), Right(partitionBy), Right(outputMode), Right(generateSymlinkManifest), Right(invalidKeys)) =>
+    (id, name, description, inputView, outputURI, numPartitions, authentication, saveMode, partitionBy, outputMode, generateSymlinkManifest, invalidKeys) match {
+      case (Right(id), Right(name), Right(description), Right(inputView), Right(outputURI), Right(numPartitions), Right(authentication), Right(saveMode), Right(partitionBy), Right(outputMode), Right(generateSymlinkManifest), Right(invalidKeys)) =>
 
         val stage = DeltaLakeLoadStage(
           plugin=this,
+          id=id,
           name=name,
           description=description,
           inputView=inputView,
@@ -96,7 +100,7 @@ class DeltaLakeLoad extends PipelineStagePlugin with JupyterCompleter {
 
         Right(stage)
       case _ =>
-        val allErrors: Errors = List(name, description, inputView, outputURI, numPartitions, authentication, saveMode, partitionBy, outputMode, generateSymlinkManifest, invalidKeys).collect{ case Left(errs) => errs }.flatten
+        val allErrors: Errors = List(id, name, description, inputView, outputURI, numPartitions, authentication, saveMode, partitionBy, outputMode, generateSymlinkManifest, invalidKeys).collect{ case Left(errs) => errs }.flatten
         val stageName = stringOrDefault(name, "unnamed stage")
         val err = StageError(index, stageName, c.origin.lineNumber, allErrors)
         Left(err :: Nil)
@@ -107,6 +111,7 @@ class DeltaLakeLoad extends PipelineStagePlugin with JupyterCompleter {
 
 case class DeltaLakeLoadStage(
     plugin: DeltaLakeLoad,
+    id: Option[String],
     name: String,
     description: Option[String],
     inputView: String,
@@ -142,17 +147,20 @@ object DeltaLakeLoadStage {
     // set write permissions
     CloudUtils.setHadoopConfiguration(stage.authentication)
 
-    val dropMap = new java.util.HashMap[String, Object]()
-
-    // Parquet cannot handle a column of NullType
+    // DeltaLakeLoad cannot handle a column of NullType
     val nulls = df.schema.filter( _.dataType == NullType).map(_.name)
-    if (!nulls.isEmpty) {
+    val nonNullDF = if (!nulls.isEmpty) {
+      val dropMap = new java.util.HashMap[String, Object]()
       dropMap.put("NullType", nulls.asJava)
+      if (arcContext.dropUnsupported) {
+        stage.stageDetail.put("drop", dropMap)
+        df.drop(nulls:_*)
+      } else {
+        throw new Exception(s"""inputView '${stage.inputView}' contains types ${new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(dropMap)} which are unsupported by DeltaLakeLoad and 'dropUnsupported' is set to false.""")
+      }
+    } else {
+      df
     }
-
-    stage.stageDetail.put("drop", dropMap)
-
-    val nonNullDF = df.drop(nulls:_*)
 
     try {
       if (nonNullDF.isStreaming) {
@@ -194,6 +202,7 @@ object DeltaLakeLoadStage {
         val commitMap = new java.util.HashMap[String, Object]()
         commitMap.put("version", java.lang.Long.valueOf(commitInfo.getVersion))
         commitMap.put("timestamp", Instant.ofEpochMilli(commitInfo.getTimestamp).atZone(ZoneId.systemDefault).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+        commitInfo.operationMetrics.foreach { operationMetrics => commitMap.put("operationMetrics", operationMetrics.map { case (k, v) => (k, Try(v.toInt).getOrElse(v)) }.asJava) }
         stage.stageDetail.put("commit", commitMap)
 
       }

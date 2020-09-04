@@ -1,5 +1,11 @@
 # Change Log
 
+## 2.2.0
+
+- add `createTableIfNotExists` option to `DeltaLakeMergeLoad` to allow creation of initial set if missing. Default `false`.
+- add logging of `operationMetrics` to all stages`.
+- update to Arc 3.2.0.
+
 ## 2.1.0
 
 - add snippets and documentation links to implement `JupyterCompleter`.

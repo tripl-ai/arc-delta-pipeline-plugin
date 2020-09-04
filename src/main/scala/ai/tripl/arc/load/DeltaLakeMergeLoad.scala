@@ -1,9 +1,11 @@
 package ai.tripl.arc.load
 
 import java.net.URI
-import scala.collection.JavaConverters._
 import java.time.format.DateTimeFormatter
 import java.time.{Instant, ZoneId}
+
+import scala.collection.JavaConverters._
+import scala.util.Try
 
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
@@ -55,11 +57,13 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin with JupyterCompleter {
     import ai.tripl.arc.config.ConfigUtils._
     implicit val c = config
 
-    val expectedKeys = "type" :: "name" :: "description" :: "environments" :: "inputView" :: "outputURI" :: "authentication" :: "params" :: "generateSymlinkManifest" :: "condition" :: "whenMatchedDeleteFirst" :: "whenNotMatchedByTargetInsert" :: "whenNotMatchedBySourceDelete" :: "whenMatchedUpdate" :: "whenMatchedDelete" :: "partitionBy" :: "numPartitions" :: Nil
+    val expectedKeys = "type" :: "id" :: "name" :: "description" :: "environments" :: "inputView" :: "outputURI" :: "createTableIfNotExists" :: "authentication" :: "params" :: "generateSymlinkManifest" :: "condition" :: "whenMatchedDeleteFirst" :: "whenNotMatchedByTargetInsert" :: "whenNotMatchedBySourceDelete" :: "whenMatchedUpdate" :: "whenMatchedDelete" :: "partitionBy" :: "numPartitions" :: Nil
+    val id = getOptionalValue[String]("id")
     val name = getValue[String]("name")
     val description = getOptionalValue[String]("description")
     val inputView = getValue[String]("inputView")
     val outputURI = getValue[String]("outputURI") |> parseURI("outputURI") _
+    val createTableIfNotExists = getValue[java.lang.Boolean]("createTableIfNotExists", default = Some(false))
     val authentication = readAuthentication("authentication")
     val partitionBy = getValue[StringList]("partitionBy", default = Some(Nil))
     val numPartitions = getOptionalValue[Int]("numPartitions")
@@ -103,15 +107,17 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin with JupyterCompleter {
     val generateSymlinkManifest = getValue[java.lang.Boolean]("generateSymlinkManifest", default = Some(true))
     val invalidKeys = checkValidKeys(c)(expectedKeys)
 
-    (name, description, inputView, outputURI, authentication, generateSymlinkManifest, condition, whenMatchedDeleteFirst, whenNotMatchedByTargetInsertCondition, whenNotMatchedBySourceDeleteCondition, whenMatchedUpdateCondition, whenMatchedDeleteCondition, partitionBy, numPartitions, invalidKeys) match {
-      case (Right(name), Right(description), Right(inputView), Right(outputURI), Right(authentication), Right(generateSymlinkManifest), Right(condition), Right(whenMatchedDeleteFirst), Right(whenNotMatchedByTargetInsertCondition), Right(whenNotMatchedBySourceDeleteCondition), Right(whenMatchedUpdateCondition), Right(whenMatchedDeleteCondition), Right(partitionBy), Right(numPartitions), Right(invalidKeys)) =>
+    (id, name, description, inputView, outputURI, createTableIfNotExists, authentication, generateSymlinkManifest, condition, whenMatchedDeleteFirst, whenNotMatchedByTargetInsertCondition, whenNotMatchedBySourceDeleteCondition, whenMatchedUpdateCondition, whenMatchedDeleteCondition, partitionBy, numPartitions, invalidKeys) match {
+      case (Right(id), Right(name), Right(description), Right(inputView), Right(outputURI), Right(createTableIfNotExists), Right(authentication), Right(generateSymlinkManifest), Right(condition), Right(whenMatchedDeleteFirst), Right(whenNotMatchedByTargetInsertCondition), Right(whenNotMatchedBySourceDeleteCondition), Right(whenMatchedUpdateCondition), Right(whenMatchedDeleteCondition), Right(partitionBy), Right(numPartitions), Right(invalidKeys)) =>
 
         val stage = DeltaLakeMergeLoadStage(
           plugin=this,
+          id=id,
           name=name,
           description=description,
           inputView=inputView,
           outputURI=outputURI,
+          createTableIfNotExists=createTableIfNotExists,
           authentication=authentication,
           params=params,
           generateSymlinkManifest=generateSymlinkManifest,
@@ -131,6 +137,7 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin with JupyterCompleter {
         stage.stageDetail.put("generateSymlinkManifest", generateSymlinkManifest)
         stage.stageDetail.put("condition", condition)
         stage.stageDetail.put("whenMatchedDeleteFirst", whenMatchedDeleteFirst)
+        stage.stageDetail.put("createTableIfNotExists", createTableIfNotExists)
         numPartitions.foreach { numPartitions => stage.stageDetail.put("numPartitions", Integer.valueOf(numPartitions)) }
         stage.stageDetail.put("partitionBy", partitionBy.asJava)
 
@@ -174,7 +181,7 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin with JupyterCompleter {
 
         Right(stage)
       case _ =>
-        val allErrors: Errors = List(name, description, inputView, outputURI, authentication, generateSymlinkManifest, condition, whenMatchedDeleteFirst, whenNotMatchedByTargetInsertCondition, whenNotMatchedBySourceDeleteCondition, whenMatchedUpdateCondition, whenMatchedDeleteCondition, partitionBy, numPartitions, invalidKeys).collect{ case Left(errs) => errs }.flatten
+        val allErrors: Errors = List(id, name, description, inputView, outputURI, createTableIfNotExists, authentication, generateSymlinkManifest, condition, whenMatchedDeleteFirst, whenNotMatchedByTargetInsertCondition, whenNotMatchedBySourceDeleteCondition, whenMatchedUpdateCondition, whenMatchedDeleteCondition, partitionBy, numPartitions, invalidKeys).collect{ case Left(errs) => errs }.flatten
         val stageName = stringOrDefault(name, "unnamed stage")
         val err = StageError(index, stageName, c.origin.lineNumber, allErrors)
         Left(err :: Nil)
@@ -202,10 +209,12 @@ case class WhenMatchedDelete(
 
 case class DeltaLakeMergeLoadStage(
     plugin: DeltaLakeMergeLoad,
+    id: Option[String],
     name: String,
     description: Option[String],
     inputView: String,
     outputURI: URI,
+    createTableIfNotExists: Boolean,
     condition: String,
     whenMatchedDeleteFirst: Boolean,
     whenNotMatchedByTargetInsert: Option[WhenNotMatchedByTargetInsert],
@@ -257,60 +266,100 @@ object DeltaLakeMergeLoadStage {
     // set write permissions
     CloudUtils.setHadoopConfiguration(stage.authentication)
 
-    try {
+    // DeltaLakeMergeLoad cannot handle a column of NullType
+    val nulls = df.schema.filter( _.dataType == NullType).map(_.name)
+    val nonNullDF = if (!nulls.isEmpty) {
+      val dropMap = new java.util.HashMap[String, Object]()
+      dropMap.put("NullType", nulls.asJava)
+      if (arcContext.dropUnsupported) {
+        stage.stageDetail.put("drop", dropMap)
+        df.drop(nulls:_*)
+      } else {
+        throw new Exception(s"""inputView '${stage.inputView}' contains types ${new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(dropMap)} which are unsupported by DeltaLakeMergeLoad and 'dropUnsupported' is set to false.""")
+      }
+    } else {
+      df
+    }
 
-        val inputDF = stage.partitionBy match {
+    try {
+        val sourceDF = stage.partitionBy match {
           case Nil => {
             stage.numPartitions match {
-              case Some(n) => df.repartition(n)
-              case None => df
+              case Some(n) => nonNullDF.repartition(n)
+              case None => nonNullDF
             }
           }
           case partitionBy => {
             // create a column array for repartitioning
-            val partitionCols = partitionBy.map(col => df(col))
+            val partitionCols = partitionBy.map(col => nonNullDF(col))
             stage.numPartitions match {
-              case Some(n) => df.repartition(n, partitionCols:_*)
-              case None => df.repartition(partitionCols:_*)
+              case Some(n) => nonNullDF.repartition(n, partitionCols:_*)
+              case None => nonNullDF.repartition(partitionCols:_*)
             }
           }
         }
 
         // build the operation
-        var deltaMergeOperation: DeltaMergeBuilder = DeltaTable.forPath(stage.outputURI.toString).as("target")
-          .merge(
-            inputDF.as("source"),
-            stage.condition)
+        try {
+          var deltaMergeOperation: DeltaMergeBuilder = DeltaTable.forPath(stage.outputURI.toString).as("target")
+            .merge(
+              sourceDF.as("source"),
+              stage.condition)
 
-        // match
-        deltaMergeOperation = if (stage.whenMatchedDeleteFirst) {
-          val deltaMergeOperationWithDelete = whenMatchedDeleteCondition(deltaMergeOperation)
-          whenMatchedUpdateCondition(deltaMergeOperationWithDelete)
-        } else {
-          val deltaMergeOperationWithUpdate = whenMatchedUpdateCondition(deltaMergeOperation)
-          whenMatchedDeleteCondition(deltaMergeOperationWithUpdate)
-        }
-
-        // if insert as source rows dont exist in target dataset
-        for (whenNotMatchedByTargetInsert <- stage.whenNotMatchedByTargetInsert) {
-          (whenNotMatchedByTargetInsert.condition, whenNotMatchedByTargetInsert.values) match {
-            case (Some(condition), Some(values)) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedByTarget(condition).insertExpr(values)
-            case (Some(condition), None) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedByTarget(condition).insertAll
-            case (None, Some(values)) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedByTarget.insertExpr(values)
-            case (None, None) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedByTarget.insertAll
+          // match
+          deltaMergeOperation = if (stage.whenMatchedDeleteFirst) {
+            val deltaMergeOperationWithDelete = whenMatchedDeleteCondition(deltaMergeOperation)
+            whenMatchedUpdateCondition(deltaMergeOperationWithDelete)
+          } else {
+            val deltaMergeOperationWithUpdate = whenMatchedUpdateCondition(deltaMergeOperation)
+            whenMatchedDeleteCondition(deltaMergeOperationWithUpdate)
           }
-        }
 
-        // if delete as target rows dont exist in source dataset
-        for (whenNotMatchedBySourceDelete <- stage.whenNotMatchedBySourceDelete) {
-          whenNotMatchedBySourceDelete.condition match {
-            case Some(condition) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedBySource(condition).delete
-            case None => deltaMergeOperation = deltaMergeOperation.whenNotMatchedBySource.delete
+          // if insert as source rows dont exist in target dataset
+          for (whenNotMatchedByTargetInsert <- stage.whenNotMatchedByTargetInsert) {
+            (whenNotMatchedByTargetInsert.condition, whenNotMatchedByTargetInsert.values) match {
+              case (Some(condition), Some(values)) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedByTarget(condition).insertExpr(values)
+              case (Some(condition), None) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedByTarget(condition).insertAll
+              case (None, Some(values)) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedByTarget.insertExpr(values)
+              case (None, None) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedByTarget.insertAll
+            }
           }
-        }
 
-        // execute
-        deltaMergeOperation.execute()
+          // if delete as target rows dont exist in source dataset
+          for (whenNotMatchedBySourceDelete <- stage.whenNotMatchedBySourceDelete) {
+            whenNotMatchedBySourceDelete.condition match {
+              case Some(condition) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedBySource(condition).delete
+              case None => deltaMergeOperation = deltaMergeOperation.whenNotMatchedBySource.delete
+            }
+          }
+
+          // execute
+          deltaMergeOperation.execute()
+        } catch {
+          case e: Exception if (e.getMessage.contains("is not a Delta table")) => {
+            if (stage.createTableIfNotExists) {
+              stage.partitionBy match {
+                case Nil => {
+                  stage.numPartitions match {
+                    case Some(n) => nonNullDF.repartition(n).write.format("delta").save(stage.outputURI.toString)
+                    case None => nonNullDF.write.format("delta").save(stage.outputURI.toString)
+                  }
+                }
+                case partitionBy => {
+                  // create a column array for repartitioning
+                  val partitionCols = partitionBy.map(col => nonNullDF(col))
+                  stage.numPartitions match {
+                    case Some(n) => nonNullDF.repartition(n, partitionCols:_*).write.format("delta").partitionBy(partitionBy:_*).save(stage.outputURI.toString)
+                    case None => nonNullDF.repartition(partitionCols:_*).write.format("delta").partitionBy(partitionBy:_*).save(stage.outputURI.toString)
+                  }
+                }
+              }
+            } else {
+              throw new Exception(s"""'${stage.outputURI}' is not a Delta table and 'createTableIfNotExists' is false so cannot complete this operation.""")
+            }
+          }
+          case e: Exception => throw e
+        }
 
         // symlink generation to support presto reading the output
         if (stage.generateSymlinkManifest) {
@@ -325,6 +374,7 @@ object DeltaLakeMergeLoadStage {
         val commitMap = new java.util.HashMap[String, Object]()
         commitMap.put("version", java.lang.Long.valueOf(commitInfo.getVersion))
         commitMap.put("timestamp", Instant.ofEpochMilli(commitInfo.getTimestamp).atZone(ZoneId.systemDefault).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+        commitInfo.operationMetrics.foreach { operationMetrics => commitMap.put("operationMetrics", operationMetrics.map { case (k, v) => (k, Try(v.toInt).getOrElse(v)) }.asJava) }
         stage.stageDetail.put("commit", commitMap)
 
     } catch {
