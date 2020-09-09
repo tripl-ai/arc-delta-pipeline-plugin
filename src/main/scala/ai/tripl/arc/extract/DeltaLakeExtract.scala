@@ -126,7 +126,15 @@ class DeltaLakeExtract extends PipelineStagePlugin with JupyterCompleter {
         (invalidKeys) match {
           case Right(_) => {
             (config.hasPath("relativeVersion"), config.hasPath("timestampAsOf"), config.hasPath("versionAsOf"), config.hasPath("canReturnLastCommit")) match {
-              case (true, false, false, _) => {
+              case (true, false, false, true) => {
+                val relativeVersion = config.getInt("relativeVersion")
+                if (relativeVersion > 0) {
+                  throw new Exception(s"relativeVersion must be less than or equal to zero.")
+                } else {
+                  Right(Some(TimeTravel(Option(relativeVersion), None, Option(config.getBoolean("canReturnLastCommit")), None)))
+                }
+              }
+              case (true, false, false, false) => {
                 val relativeVersion = config.getInt("relativeVersion")
                 if (relativeVersion > 0) {
                   throw new Exception(s"relativeVersion must be less than or equal to zero.")
@@ -204,13 +212,18 @@ object DeltaLakeExtractStage {
           timeTravel.versionAsOf.foreach { versionAsOf => optionsMap.put("versionAsOf", versionAsOf.toString) }
 
           // determine whether to time travel to a specific version or a calculated version
-          for (relativeVersion <- timeTravel.relativeVersion) {
+          timeTravel.relativeVersion.foreach { relativeVersion =>
             val versions = commitInfos.map { version => version.getVersion }
             val minVersion = versions.reduceLeft(_ min _)
             val maxVersion = versions.reduceLeft(_ max _)
             val maxOffset = maxVersion - minVersion
-            if (relativeVersion < (maxOffset * -1)) {
-                throw new Exception(s"Cannot time travel Delta table to version ${relativeVersion}. Available versions: [-${maxOffset} ... 0].")
+            val canReturnLastCommit = timeTravel.canReturnLastCommit.getOrElse(false)
+            if (relativeVersion < (maxOffset * -1) && !canReturnLastCommit) {
+              throw new Exception(s"Cannot time travel Delta table to version ${relativeVersion}. Available versions: [-${maxOffset} ... 0].")
+            } else if  (relativeVersion < (maxOffset * -1) && canReturnLastCommit) {
+              val calculatedVersion = minVersion
+              calculatedVersionAsOf = Option(calculatedVersion)
+              optionsMap.put("versionAsOf", calculatedVersion.toString)
             } else {
               val calculatedVersion = maxVersion + relativeVersion
               calculatedVersionAsOf = Option(calculatedVersion)

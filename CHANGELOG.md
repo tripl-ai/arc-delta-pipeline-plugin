@@ -1,5 +1,9 @@
 # Change Log
 
+## 2.3.0
+
+- add `canReturnLastCommit` support for `relativeVersion` which will return the oldest version supported greater than `relativeVersion`.
+
 ## 2.2.0
 
 - add `createTableIfNotExists` option to `DeltaLakeMergeLoad` to allow creation of initial set if missing. Default `false`.

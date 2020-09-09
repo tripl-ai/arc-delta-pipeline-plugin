@@ -161,7 +161,25 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
     }
     assert(thrown0.getMessage.contains("Cannot time travel Delta table to version -3. Available versions: [-2 ... 0]."))
 
-    val dataset = extract.DeltaLakeExtractStage.execute(
+    val dataset0 = extract.DeltaLakeExtractStage.execute(
+      extract.DeltaLakeExtractStage(
+        plugin=new extract.DeltaLakeExtract,
+        id=None,
+        name=outputView,
+        description=None,
+        input=output,
+        outputView=outputView,
+        authentication=None,
+        params=Map.empty,
+        persist=false,
+        numPartitions=None,
+        partitionBy=Nil,
+        timeTravel=Some(extract.TimeTravel(Some(-3), None, Some(true), None))
+      )
+    ).get
+    assert(dataset0.first.getInt(0) == 2)
+
+    val dataset1 = extract.DeltaLakeExtractStage.execute(
       extract.DeltaLakeExtractStage(
         plugin=new extract.DeltaLakeExtract,
         id=None,
@@ -178,7 +196,7 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
       )
     ).get
 
-    assert(dataset.first.getInt(0) == 2)
+    assert(dataset1.first.getInt(0) == 2)
   }
 
   test("DeltaLakeExtract: bad option key") {
