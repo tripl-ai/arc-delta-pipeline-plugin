@@ -3,6 +3,7 @@
 ## 2.3.0
 
 - add `canReturnLastCommit` support for `relativeVersion` which will return the oldest version supported greater than `relativeVersion`.
+- add `shufflePartitions` to `DeltaLakeMergeLoad` which is used to distribute (`repartition`) data to workers and may need to be increased if many files are present.
 
 ## 2.2.0
 
