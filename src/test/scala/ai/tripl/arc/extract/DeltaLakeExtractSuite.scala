@@ -155,13 +155,27 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
           persist=false,
           numPartitions=None,
           partitionBy=Nil,
-          timeTravel=Some(extract.TimeTravel(Some(-3), None, None, None))
+          timeTravel=Some(extract.TimeTravel(Some(-3), None, None, None)),
+          schema=Right(Nil),
         )
       ).get
     }
     assert(thrown0.getMessage.contains("Cannot time travel Delta table to version -3. Available versions: [-2 ... 0]."))
 
-    val dataset = extract.DeltaLakeExtractStage.execute(
+    // test a schema
+    val schema = ai.tripl.arc.util.ArcSchema.parseArcSchema("""
+    |[{
+    |  "name": "version",
+    |  "type": "integer",
+    |  "trim": true,
+    |  "nullable": true,
+    |  "nullableValues": [
+    |      "",
+    |      "null"
+    |  ]
+    |}]""".stripMargin)
+
+    val dataset0 = extract.DeltaLakeExtractStage.execute(
       extract.DeltaLakeExtractStage(
         plugin=new extract.DeltaLakeExtract,
         id=None,
@@ -174,11 +188,49 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
         persist=false,
         numPartitions=None,
         partitionBy=Nil,
-        timeTravel=Some(extract.TimeTravel(Some(-2), None, None, None))
+        timeTravel=Some(extract.TimeTravel(Some(-100), None, None, None)),
+        schema=Right(schema.right.get),
       )
     ).get
+    assert(dataset0.count == 0)
 
-    assert(dataset.first.getInt(0) == 2)
+    val dataset1 = extract.DeltaLakeExtractStage.execute(
+      extract.DeltaLakeExtractStage(
+        plugin=new extract.DeltaLakeExtract,
+        id=None,
+        name=outputView,
+        description=None,
+        input=output,
+        outputView=outputView,
+        authentication=None,
+        params=Map.empty,
+        persist=false,
+        numPartitions=None,
+        partitionBy=Nil,
+        timeTravel=Some(extract.TimeTravel(Some(-3), None, Some(true), None)),
+        schema=Right(Nil),
+      )
+    ).get
+    assert(dataset1.first.getInt(0) == 2)
+
+    val dataset2 = extract.DeltaLakeExtractStage.execute(
+      extract.DeltaLakeExtractStage(
+        plugin=new extract.DeltaLakeExtract,
+        id=None,
+        name=outputView,
+        description=None,
+        input=output,
+        outputView=outputView,
+        authentication=None,
+        params=Map.empty,
+        persist=false,
+        numPartitions=None,
+        partitionBy=Nil,
+        timeTravel=Some(extract.TimeTravel(Some(-2), None, None, None)),
+        schema=Right(Nil),
+      )
+    ).get
+    assert(dataset2.first.getInt(0) == 2)
   }
 
   test("DeltaLakeExtract: bad option key") {
