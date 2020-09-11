@@ -233,13 +233,7 @@ object DeltaLakeExtractStage {
             val maxOffset = maxVersion - minVersion
             val canReturnLastCommit = timeTravel.canReturnLastCommit.getOrElse(false)
             if (relativeVersion < (maxOffset * -1) && !canReturnLastCommit) {
-              if (optionSchema.isEmpty) {
-                throw new Exception(s"Cannot time travel Delta table to version ${relativeVersion}. Available versions: [-${maxOffset} ... 0].")
-              } else {
-                val calculatedVersion = maxVersion + relativeVersion
-                calculatedVersionAsOf = Option(calculatedVersion)
-                optionsMap.put("versionAsOf", calculatedVersion.toString)
-              }
+              throw new Exception(s"Cannot time travel Delta table to version ${relativeVersion}. Available versions: [-${maxOffset} ... 0].")
             } else if  (relativeVersion < (maxOffset * -1) && canReturnLastCommit) {
               val calculatedVersion = minVersion
               calculatedVersionAsOf = Option(calculatedVersion)
@@ -253,58 +247,53 @@ object DeltaLakeExtractStage {
         }
 
         // read the data
-        val (df, empty) = try {
-          (spark.read.format("delta").options(optionsMap).load(stage.input), false)
-        } catch {
-          case e: Exception if (e.getMessage.contains("Cannot time travel Delta table to version")) =>
-            optionSchema match {
-              case Some(schema) => (spark.createDataFrame(spark.sparkContext.emptyRDD[Row], schema), true)
-              case None => throw e
-            }
-        }
+        val df = spark.read.format("delta").options(optionsMap).load(stage.input)
 
-        // if the version was available then log commitInfo
-        if (!empty) {
-          // version logging
-          // this is useful for timestampAsOf as DeltaLake will extract the last timestamp EARLIER than the given timestamp
-          // so the value passed in by the user is not nescessarily aligned with an actual version
-          val commitInfo = stage.timeTravel match {
-            case Some(timeTravel) => {
-              val tt = (calculatedVersionAsOf, timeTravel.versionAsOf, timeTravel.timestampAsOf, timeTravel.canReturnLastCommit) match {
-                case (Some(calculatedVersionAsOf), None, _, _) => {
-                  DeltaTimeTravelSpec(None, None, Some(calculatedVersionAsOf), None)
-                }
-                case (None, Some(versionAsOf), _, _) => {
-                  DeltaTimeTravelSpec(None, None, Some(versionAsOf), None)
-                }
-                case (None, None, Some(timestampAsOf), None) => {
-                  DeltaTimeTravelSpec(Some(Literal(timestampAsOf)), None, None, None)
-                }
-                case (None, None, Some(timestampAsOf), Some(canReturnLastCommit)) => {
-                  DeltaTimeTravelSpec(Some(Literal(timestampAsOf)), Some(canReturnLastCommit), None, None)
-                }
-                case _ => {
-                  throw new Exception("invalid state please raise issue.")
-                }
+        // version logging
+        // this is useful for timestampAsOf as DeltaLake will extract the last timestamp EARLIER than the given timestamp
+        // so the value passed in by the user is not nescessarily aligned with an actual version
+        val commitInfo = stage.timeTravel match {
+          case Some(timeTravel) => {
+            val tt = (calculatedVersionAsOf, timeTravel.versionAsOf, timeTravel.timestampAsOf, timeTravel.canReturnLastCommit) match {
+              case (Some(calculatedVersionAsOf), None, _, _) => {
+                DeltaTimeTravelSpec(None, None, Some(calculatedVersionAsOf), None)
               }
-              val (version, _) = DeltaTableUtils.resolveTimeTravelVersion(spark.sessionState.conf, deltaLog, tt)
-              commitInfos.filter { commit =>
-                commit.getVersion == version
-              }(0)
+              case (None, Some(versionAsOf), _, _) => {
+                DeltaTimeTravelSpec(None, None, Some(versionAsOf), None)
+              }
+              case (None, None, Some(timestampAsOf), None) => {
+                DeltaTimeTravelSpec(Some(Literal(timestampAsOf)), None, None, None)
+              }
+              case (None, None, Some(timestampAsOf), Some(canReturnLastCommit)) => {
+                DeltaTimeTravelSpec(Some(Literal(timestampAsOf)), Some(canReturnLastCommit), None, None)
+              }
+              case _ => {
+                throw new Exception("invalid state please raise issue.")
+              }
             }
-            case None => commitInfos.sortBy(_.version).reverse(0)
+            val (version, _) = DeltaTableUtils.resolveTimeTravelVersion(spark.sessionState.conf, deltaLog, tt)
+            commitInfos.filter { commit =>
+              commit.getVersion == version
+            }(0)
           }
-
-          val commitMap = new java.util.HashMap[String, Object]()
-          commitMap.put("version", java.lang.Long.valueOf(commitInfo.getVersion))
-          commitMap.put("timestamp", Instant.ofEpochMilli(commitInfo.getTimestamp).atZone(ZoneId.systemDefault).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
-          commitInfo.operationMetrics.foreach { operationMetrics => commitMap.put("operationMetrics", operationMetrics.map { case (k, v) => (k, Try(v.toInt).getOrElse(v)) }.asJava) }
-          stage.stageDetail.put("commit", commitMap)
+          case None => commitInfos.sortBy(_.version).reverse(0)
         }
+
+        val commitMap = new java.util.HashMap[String, Object]()
+        commitMap.put("version", java.lang.Long.valueOf(commitInfo.getVersion))
+        commitMap.put("timestamp", Instant.ofEpochMilli(commitInfo.getTimestamp).atZone(ZoneId.systemDefault).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+        commitInfo.operationMetrics.foreach { operationMetrics => commitMap.put("operationMetrics", operationMetrics.map { case (k, v) => (k, Try(v.toInt).getOrElse(v)) }.asJava) }
+        stage.stageDetail.put("commit", commitMap)
+
 
         df
       }
     } catch {
+      case e: Exception if (e.getMessage.contains("No such file or directory") && e.getMessage.contains("_delta_log")) =>
+        optionSchema match {
+          case Some(schema) => spark.createDataFrame(spark.sparkContext.emptyRDD[Row], schema)
+          case None => throw new Exception(EmptySchemaExtractError(Some(stage.input)).getMessage)
+        }
       case e: Exception => throw new Exception(e) with DetailException {
         override val detail = stage.stageDetail
       }
