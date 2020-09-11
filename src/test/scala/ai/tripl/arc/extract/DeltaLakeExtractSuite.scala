@@ -137,10 +137,6 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
     val testUUID = UUID.randomUUID.toString
     val output = s"${FileUtils.getTempDirectoryPath}/${testUUID}"
 
-    Seq((2)).toDF("version").write.format("delta").mode("overwrite").save(output)
-    Seq((1)).toDF("version").write.format("delta").mode("overwrite").save(output)
-    Seq((0)).toDF("version").write.format("delta").mode("overwrite").save(output)
-
     val thrown0 = intercept[Exception with DetailException] {
       val dataset = extract.DeltaLakeExtractStage.execute(
         extract.DeltaLakeExtractStage(
@@ -160,7 +156,7 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
         )
       ).get
     }
-    assert(thrown0.getMessage.contains("Cannot time travel Delta table to version -3. Available versions: [-2 ... 0]."))
+    assert(thrown0.getMessage.contains("does not contain any fields and no schema has been provided to create an empty dataframe"))
 
     // test a schema
     val schema = ai.tripl.arc.util.ArcSchema.parseArcSchema("""
@@ -188,11 +184,36 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
         persist=false,
         numPartitions=None,
         partitionBy=Nil,
-        timeTravel=Some(extract.TimeTravel(Some(-100), None, None, None)),
+        timeTravel=Some(extract.TimeTravel(Some(-3), None, None, None)),
         schema=Right(schema.right.get),
       )
     ).get
     assert(dataset0.count == 0)
+
+    Seq((2)).toDF("version").write.format("delta").mode("overwrite").save(output)
+    Seq((1)).toDF("version").write.format("delta").mode("overwrite").save(output)
+    Seq((0)).toDF("version").write.format("delta").mode("overwrite").save(output)
+
+    val thrown1 = intercept[Exception with DetailException] {
+      val dataset = extract.DeltaLakeExtractStage.execute(
+        extract.DeltaLakeExtractStage(
+          plugin=new extract.DeltaLakeExtract,
+          id=None,
+          name=outputView,
+          description=None,
+          input=output,
+          outputView=outputView,
+          authentication=None,
+          params=Map.empty,
+          persist=false,
+          numPartitions=None,
+          partitionBy=Nil,
+          timeTravel=Some(extract.TimeTravel(Some(-3), None, None, None)),
+          schema=Right(Nil),
+        )
+      ).get
+    }
+    assert(thrown1.getMessage.contains("Cannot time travel Delta table to version -3. Available versions: [-2 ... 0]."))
 
     val dataset1 = extract.DeltaLakeExtractStage.execute(
       extract.DeltaLakeExtractStage(
