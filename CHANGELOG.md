@@ -1,5 +1,9 @@
 # Change Log
 
+## 2.3.1
+
+- **FIX** pass through `numPartitions` to `DeltaLakeMerge` load properly.
+
 ## 2.3.0
 
 - add `canReturnLastCommit` support for `relativeVersion` which will return the oldest version supported greater than `relativeVersion`.
