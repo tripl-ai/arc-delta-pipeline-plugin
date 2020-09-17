@@ -354,6 +354,8 @@ object DeltaLakeMergeLoadStage {
             }
           }
           case e: Exception => throw e
+        } finally {
+          spark.conf.unset("arc.delta.partitions")
         }
 
         // symlink generation to support presto reading the output
