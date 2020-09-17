@@ -1,9 +1,12 @@
 # Change Log
 
+## 2.3.1
+
+- **FIX** pass through `numPartitions` to `DeltaLakeMerge` load properly.
+
 ## 2.3.0
 
 - add `canReturnLastCommit` support for `relativeVersion` which will return the oldest version supported greater than `relativeVersion`.
-- add `shufflePartitions` to `DeltaLakeMergeLoad` which is used to distribute (`repartition`) data to workers and may need to be increased if many files are present.
 - add `schemaURI` and `schemaView` to `DeltaLakeExtract` to allow provision of a schema if the `inputURI` does not exist.
 
 ## 2.2.0

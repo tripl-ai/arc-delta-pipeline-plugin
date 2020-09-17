@@ -283,21 +283,16 @@ object DeltaLakeMergeLoadStage {
 
     try {
         val sourceDF = stage.partitionBy match {
-          case Nil => {
-            stage.numPartitions match {
-              case Some(n) => nonNullDF.repartition(n)
-              case None => nonNullDF
-            }
-          }
+          case Nil => nonNullDF
           case partitionBy => {
             // create a column array for repartitioning
             val partitionCols = partitionBy.map(col => nonNullDF(col))
-            stage.numPartitions match {
-              case Some(n) => nonNullDF.repartition(n, partitionCols:_*)
-              case None => nonNullDF.repartition(partitionCols:_*)
-            }
+            nonNullDF.repartition(partitionCols:_*)
           }
         }
+
+        // this is pushed through to the delta layer
+        stage.numPartitions.foreach { numPartitions => spark.conf.set("arc.delta.partitions", numPartitions) }
 
         // build the operation
         try {
