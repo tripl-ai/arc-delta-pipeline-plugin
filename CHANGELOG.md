@@ -1,5 +1,9 @@
 # Change Log
 
+## 2.4.0
+
+- bump to Arc 3.4.0.
+
 ## 2.3.1
 
 - **FIX** pass through `numPartitions` to `DeltaLakeMerge` load properly.
