@@ -39,16 +39,15 @@ class DeltaLakeExtract extends PipelineStagePlugin with JupyterCompleter {
 
   val version = ai.tripl.arc.deltalake.BuildInfo.version
 
-  val snippet = """{
+  def snippet()(implicit arcContext: ARCContext): String = {
+    s"""{
     |  "type": "DeltaLakeExtract",
     |  "name": "DeltaLakeExtract",
-    |  "environments": [
-    |    "production",
-    |    "test"
-    |  ],
+    |  "environments": [${arcContext.completionEnvironments.map { env => s""""${env}""""}.mkString(", ")}],
     |  "inputURI": "hdfs://*.delta",
     |  "outputView": "outputView"
     |}""".stripMargin
+  }
 
   val documentationURI = new java.net.URI(s"${baseURI}/extract/#deltalakeextract")
 
