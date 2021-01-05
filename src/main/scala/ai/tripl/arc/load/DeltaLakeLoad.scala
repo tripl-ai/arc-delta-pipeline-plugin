@@ -33,16 +33,15 @@ class DeltaLakeLoad extends PipelineStagePlugin with JupyterCompleter {
 
   val version = ai.tripl.arc.deltalake.BuildInfo.version
 
-  val snippet = """{
+  def snippet()(implicit arcContext: ARCContext): String = {
+    s"""{
     |  "type": "DeltaLakeLoad",
     |  "name": "DeltaLakeLoad",
-    |  "environments": [
-    |    "production",
-    |    "test"
-    |  ],
+    |  "environments": [${arcContext.completionEnvironments.map { env => s""""${env}""""}.mkString(", ")}],
     |  "inputView": "inputView",
     |  "outputURI": "hdfs://*.delta"
     |}""".stripMargin
+  }
 
   val documentationURI = new java.net.URI(s"${baseURI}/load/#deltalakeload")
 
