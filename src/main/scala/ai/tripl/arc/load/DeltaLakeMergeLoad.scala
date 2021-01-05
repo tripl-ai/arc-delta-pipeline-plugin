@@ -34,13 +34,11 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin with JupyterCompleter {
 
   val version = ai.tripl.arc.deltalake.BuildInfo.version
 
-  val snippet = """{
+  def snippet()(implicit arcContext: ARCContext): String = {
+    s"""{
     |  "type": "DeltaLakeMergeLoad",
     |  "name": "DeltaLakeMergeLoad",
-    |  "environments": [
-    |    "production",
-    |    "test"
-    |  ],
+    |  "environments": [${arcContext.completionEnvironments.map { env => s""""${env}""""}.mkString(", ")}],
     |  "inputView": "inputView",
     |  "outputURI": "hdfs://*.delta",
     |  "condition": "source.primaryKey = target.primaryKey",
@@ -49,6 +47,7 @@ class DeltaLakeMergeLoad extends PipelineStagePlugin with JupyterCompleter {
     |  "whenNotMatchedByTargetInsert": {},
     |  "whenNotMatchedBySourceDelete": {}
     |}""".stripMargin
+  }
 
   val documentationURI = new java.net.URI(s"${baseURI}/load/#deltalakemergeload")
 

@@ -1,5 +1,9 @@
 # Change Log
 
+## 2.5.0
+
+- bump to Arc 3.7.0.
+
 ## 2.4.1
 
 - set name on Dataframe when `persist=true` to help understand persisted datasets when using the Spark UI.
