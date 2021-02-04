@@ -1,5 +1,9 @@
 # Change Log
 
+## 2.6.0
+
+- catch `No commits found` errors from Delta in `DeltaLakeExtract`.
+
 ## 2.5.0
 
 - bump to Arc 3.7.0.
