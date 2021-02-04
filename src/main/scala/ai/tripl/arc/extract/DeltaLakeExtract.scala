@@ -284,11 +284,10 @@ object DeltaLakeExtractStage {
         commitInfo.operationMetrics.foreach { operationMetrics => commitMap.put("operationMetrics", operationMetrics.map { case (k, v) => (k, Try(v.toInt).getOrElse(v)) }.asJava) }
         stage.stageDetail.put("commit", commitMap)
 
-
         df
       }
     } catch {
-      case e: Exception if (e.getMessage.contains("No such file or directory") && e.getMessage.contains("_delta_log")) =>
+      case e: Exception if (e.getMessage.contains("No such file or directory") && e.getMessage.contains("_delta_log")) || e.getMessage.contains("No commits found") =>
         optionSchema match {
           case Some(schema) => spark.createDataFrame(spark.sparkContext.emptyRDD[Row], schema)
           case None => throw new Exception(EmptySchemaExtractError(Some(stage.input)).getMessage)
