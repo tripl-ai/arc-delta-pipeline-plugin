@@ -312,18 +312,18 @@ object DeltaLakeMergeLoadStage {
         // if insert as source rows dont exist in target dataset
         for (whenNotMatchedByTargetInsert <- stage.whenNotMatchedByTargetInsert) {
           (whenNotMatchedByTargetInsert.condition, whenNotMatchedByTargetInsert.values) match {
-            case (Some(condition), Some(values)) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedByTarget(condition).insertExpr(values)
-            case (Some(condition), None) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedByTarget(condition).insertAll
-            case (None, Some(values)) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedByTarget.insertExpr(values)
-            case (None, None) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedByTarget.insertAll
+            case (Some(condition), Some(values)) => deltaMergeOperation = deltaMergeOperation.whenNotMatched(condition).insertExpr(values)
+            case (Some(condition), None) => deltaMergeOperation = deltaMergeOperation.whenNotMatched(condition).insertAll
+            case (None, Some(values)) => deltaMergeOperation = deltaMergeOperation.whenNotMatched.insertExpr(values)
+            case (None, None) => deltaMergeOperation = deltaMergeOperation.whenNotMatched.insertAll
           }
         }
 
         // if delete as target rows dont exist in source dataset
         for (whenNotMatchedBySourceDelete <- stage.whenNotMatchedBySourceDelete) {
           whenNotMatchedBySourceDelete.condition match {
-            case Some(condition) => deltaMergeOperation = deltaMergeOperation.whenNotMatchedBySource(condition).delete
-            case None => deltaMergeOperation = deltaMergeOperation.whenNotMatchedBySource.delete
+            case Some(condition) => deltaMergeOperation = deltaMergeOperation.whenNotMatched(condition).deleteTarget
+            case None => deltaMergeOperation = deltaMergeOperation.whenNotMatched.deleteTarget
           }
         }
 
