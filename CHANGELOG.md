@@ -1,5 +1,10 @@
 # Change Log
 
+## 2.7.0
+
+- bump to Delta 0.8.0.
+- bump to Spark 3.0.2.
+
 ## 2.6.0
 
 - catch `No commits found` errors from Delta in `DeltaLakeExtract`.
