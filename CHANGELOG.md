@@ -1,5 +1,10 @@
 # Change Log
 
+## 2.8.0
+
+- bump to Delta 1.0.0.
+- bump to Spark 3.1.2.
+
 ## 2.7.0
 
 - bump to Delta 0.8.0.
