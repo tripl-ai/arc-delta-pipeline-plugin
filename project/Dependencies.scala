@@ -2,8 +2,8 @@ import sbt._
 
 object Dependencies {
   // versions
-  lazy val sparkVersion = "3.1.2"
-  lazy val hadoopVersion = "3.2.0"
+  lazy val sparkVersion = "3.3.2"
+  lazy val hadoopVersion = "3.3.4"
 
   // testing
   val scalaTest = "org.scalatest" %% "scalatest" % "3.0.7" % "test,it"
@@ -13,7 +13,7 @@ object Dependencies {
   val novocode = "com.novocode" % "junit-interface" % "0.11" % "test"
 
   // arc
-  val arc = "ai.tripl" %% "arc" % "3.7.0" % "provided"
+  val arc = "ai.tripl" %% "arc" % "3.13.2" % "provided"
 
   // spark
   val sparkCatalyst = "org.apache.spark" %% "spark-catalyst" % sparkVersion % "provided"
@@ -22,7 +22,7 @@ object Dependencies {
   val sparkSql = "org.apache.spark" %% "spark-sql" % sparkVersion % "provided"
 
   // delta
-  // see lib_2.12
+  val delta = "io.delta" %% "delta-core" % "2.2.0"
 
   // Project
   val etlDeps = Seq(
@@ -37,6 +37,8 @@ object Dependencies {
     sparkCatalyst,
     sparkCore,
     sparkHive,
-    sparkSql
+    sparkSql,
+
+    delta
   )
 }

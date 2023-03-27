@@ -44,6 +44,8 @@ class DeltaLakeExtractSuite extends FunSuite with BeforeAndAfter {
                   .master("local[*]")
                   .config("spark.ui.port", "9999")
                   .config("spark.delta.logStore.class", "org.apache.spark.sql.delta.storage.S3SingleDriverLogStore")
+                  .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
+                  .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
                   .appName("Spark ETL Test")
                   .getOrCreate()
     spark.sparkContext.setLogLevel("INFO")

@@ -1,5 +1,11 @@
 # Change Log
 
+## 3.0.0
+
+- bump to Delta 2.3.0.
+- bump to Arc 3.3.2.
+- Removed DeltaLakeMergeLoad due to delta API changes
+
 ## 2.8.0
 
 - bump to Delta 1.0.0.
