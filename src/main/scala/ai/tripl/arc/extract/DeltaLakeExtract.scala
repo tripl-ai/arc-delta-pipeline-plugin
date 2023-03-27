@@ -255,16 +255,13 @@ object DeltaLakeExtractStage {
           case Some(timeTravel) => {
             val tt = (calculatedVersionAsOf, timeTravel.versionAsOf, timeTravel.timestampAsOf, timeTravel.canReturnLastCommit) match {
               case (Some(calculatedVersionAsOf), None, _, _) => {
-                DeltaTimeTravelSpec(None, None, Some(calculatedVersionAsOf), None)
+                DeltaTimeTravelSpec(None, Some(calculatedVersionAsOf), None)
               }
               case (None, Some(versionAsOf), _, _) => {
-                DeltaTimeTravelSpec(None, None, Some(versionAsOf), None)
+                DeltaTimeTravelSpec(None, Some(versionAsOf), None)
               }
               case (None, None, Some(timestampAsOf), None) => {
-                DeltaTimeTravelSpec(Some(Literal(timestampAsOf)), None, None, None)
-              }
-              case (None, None, Some(timestampAsOf), Some(canReturnLastCommit)) => {
-                DeltaTimeTravelSpec(Some(Literal(timestampAsOf)), Some(canReturnLastCommit), None, None)
+                DeltaTimeTravelSpec(Some(Literal(timestampAsOf)), None, None)
               }
               case _ => {
                 throw new Exception("invalid state please raise issue.")

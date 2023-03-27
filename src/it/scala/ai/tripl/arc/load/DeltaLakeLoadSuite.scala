@@ -38,7 +38,8 @@ class DeltaLakeLoadSuite extends FunSuite with BeforeAndAfter {
   val deltaUser = "deltaUser"
   val deltaSecret = "deltaSecret"
 
-  val outputURI = s"s3a://${bucketName}/delta"
+  //val outputURI = s"s3a://${bucketName}/delta"
+  val outputURI = s"/${bucketName}/delta"
 
   before {
     implicit val spark = SparkSession
@@ -46,6 +47,8 @@ class DeltaLakeLoadSuite extends FunSuite with BeforeAndAfter {
                   .master("local[*]")
                   .config("spark.ui.port", "9999")
                   .config("spark.delta.logStore.class", "org.apache.spark.sql.delta.storage.S3SingleDriverLogStore")
+                  .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
+                  .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
                   .appName("Spark ETL Test")
                   .getOrCreate()
     spark.sparkContext.setLogLevel("INFO")
@@ -79,13 +82,7 @@ class DeltaLakeLoadSuite extends FunSuite with BeforeAndAfter {
             "test"
           ],
           "inputView": "${inputView}",
-          "outputURI": "${outputURI}",
-          "authentication": {
-            "method": "AmazonAccessKey",
-            "accessKeyID": "${minioAccessKey}",
-            "secretAccessKey": "${minioSecretKey}",
-            "endpoint": "${minioHostPort}"
-          }
+          "outputURI": "${outputURI}"
         }
       ]
     }"""
@@ -120,13 +117,7 @@ class DeltaLakeLoadSuite extends FunSuite with BeforeAndAfter {
             "test"
           ],
           "inputView": "${inputView}",
-          "outputURI": "${outputURI}",
-          "authentication": {
-            "method": "AmazonAccessKey",
-            "accessKeyID": "${deltaUser}",
-            "secretAccessKey": "${deltaSecret}",
-            "endpoint": "${minioHostPort}"
-          }
+          "outputURI": "${outputURI}"
         }
       ]
     }"""
