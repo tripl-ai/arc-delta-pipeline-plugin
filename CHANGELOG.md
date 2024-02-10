@@ -1,5 +1,11 @@
 # Change Log
 
+## 3.1.0
+
+- bump to Arc 4.3.0
+- bump to Spark 3.3.4
+
+
 ## 3.0.0
 
 - bump to Delta 2.3.0.
