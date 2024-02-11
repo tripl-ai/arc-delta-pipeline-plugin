@@ -50,7 +50,7 @@ steps:
     ./sbt "+it:test"
   displayName: 'sbt it:test'  
 
-  - script: |
+- script: |
     docker exec \
     -e SONATYPE_USERNAME=$(SONATYPE_USERNAME) \
     -e SONATYPE_PASSWORD=$(SONATYPE_PASSWORD) \
