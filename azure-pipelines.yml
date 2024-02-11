@@ -50,6 +50,17 @@ steps:
     ./sbt "+it:test"
   displayName: 'sbt it:test'  
 
+  - script: |
+    docker exec \
+    -e SONATYPE_USERNAME=$(SONATYPE_USERNAME) \
+    -e SONATYPE_PASSWORD=$(SONATYPE_PASSWORD) \
+    -e PGP_PASSPHRASE=$(PGP_PASSPHRASE) \
+    sbt \
+    ./sbt "sonatypeDropAll"
+  displayName: 'sbt sonatypeDropAll (push to https://oss.sonatype.org/content/groups/staging/ai/tripl/)'
+  condition: and(succeeded(), contains(variables['Build.SourceBranch'], 'refs/heads/sonatype-clean'))
+
+
 - script: |
     docker exec \
     -e SONATYPE_USERNAME=$(SONATYPE_USERNAME) \
